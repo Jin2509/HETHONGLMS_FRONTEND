@@ -1,0 +1,260 @@
+import { useState } from "react";
+import { Plus, CheckCircle2 } from "lucide-react";
+import { Modal } from "../../../components/shared";
+import { toast } from "sonner";
+import { getVietnamDateInputValue } from "../../../utils/datetime";
+import { useAuth } from "../../../contexts/AuthContext";
+import { canManageContent, canSubmitWork, canViewAllSubmissions } from "../../../utils/permissions";
+import { AssignmentTable } from "../components/AssignmentTable";
+import { AssignmentFormModal } from "../components/AssignmentFormModal";
+import type { Assignment, AssignmentFormData } from "../types/assignment.types";
+
+const assignments: Assignment[] = [
+  {
+    id: 1,
+    name: "React Component Design",
+    course: "Web Development",
+    dueDate: "2026-06-05",
+    status: "Chưa nộp",
+    hoursLeft: 72,
+  },
+  {
+    id: 2,
+    name: "Database Schema Design",
+    course: "Database Systems",
+    dueDate: "2026-06-03",
+    status: "Đã nộp",
+    hoursLeft: 24,
+  },
+  {
+    id: 3,
+    name: "Algorithm Analysis",
+    course: "Data Structures",
+    dueDate: "2026-06-02",
+    status: "Đã chấm",
+    hoursLeft: 6,
+  },
+  {
+    id: 4,
+    name: "CSS Flexbox Practice",
+    course: "Web Development",
+    dueDate: "2026-06-08",
+    status: "Chưa nộp",
+    hoursLeft: 144,
+  },
+  {
+    id: 5,
+    name: "SQL Query Optimization",
+    course: "Database Systems",
+    dueDate: "2026-05-28",
+    status: "Đã chấm",
+    hoursLeft: -120,
+  },
+];
+
+export function AssignmentListPage() {
+  const { user } = useAuth();
+  const userRole = user?.role || "student";
+  const [activeTab, setActiveTab] = useState<"all" | "pending" | "submitted" | "graded">("all");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [formData, setFormData] = useState<AssignmentFormData>({
+    name: "",
+    course: "",
+    dueDate: "",
+    dueTime: "",
+    description: "",
+    maxScore: 10,
+    attachments: [],
+  });
+
+  const filteredAssignments = assignments.filter((assignment) => {
+    if (activeTab === "all") return true;
+    if (activeTab === "pending") return assignment.status === "Chưa nộp";
+    if (activeTab === "submitted") return assignment.status === "Đã nộp" || assignment.status === "Đang chấm";
+    if (activeTab === "graded") return assignment.status === "Đã chấm";
+    return true;
+  });
+
+  const handleCreate = () => {
+    setFormData({
+      name: "",
+      course: "",
+      dueDate: getVietnamDateInputValue(),
+      dueTime: "23:59",
+      description: "",
+      maxScore: 10,
+      attachments: [],
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleEdit = (assignment: Assignment) => {
+    setSelectedAssignment(assignment);
+    setFormData({
+      name: assignment.name,
+      course: assignment.course,
+      dueDate: assignment.dueDate,
+      dueTime: "23:59",
+      description: assignment.description || "",
+      maxScore: assignment.maxScore || 10,
+      attachments: [],
+    });
+    setShowEditModal(true);
+  };
+
+  const handleDelete = (assignment: Assignment) => {
+    setSelectedAssignment(assignment);
+    setShowDeleteModal(true);
+  };
+
+  const handleSaveCreate = () => {
+    // TODO: Gọi API tạo bài tập
+    console.log("Creating assignment:", formData);
+    setShowCreateModal(false);
+    toast.success("Tạo bài tập thành công", {
+      description: `Bài tập "${formData.name}" đã được thêm vào khóa học`,
+    });
+  };
+
+  const handleSaveEdit = () => {
+    // TODO: Gọi API cập nhật bài tập
+    console.log("Updating assignment:", formData);
+    setShowEditModal(false);
+    toast.success("Cập nhật thành công", {
+      description: "Thông tin bài tập đã được lưu",
+    });
+  };
+
+  const handleConfirmDelete = () => {
+    // TODO: Gọi API xóa bài tập
+    const assignmentName = selectedAssignment?.name;
+    console.log("Deleting assignment:", selectedAssignment?.id);
+    setShowDeleteModal(false);
+    toast.success("Xóa thành công", {
+      description: `Bài tập "${assignmentName}" đã được xóa`,
+    });
+  };
+
+  return (
+    <div className="animate-fade-in">
+      {/* Header */}
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Bài tập</h1>
+          <p className="text-muted-foreground">
+            Quản lý và nộp bài tập của các khóa học
+          </p>
+        </div>
+        {canManageContent(userRole) && (
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="font-medium">Tạo bài tập</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="mb-6">
+        <div className="border-b border-border">
+          <div className="flex gap-6">
+            {[
+              { key: "all", label: "Tất cả", count: assignments.length },
+              { key: "pending", label: "Chưa nộp", count: assignments.filter((a) => a.status === "Chưa nộp").length },
+              { key: "submitted", label: "Đã nộp", count: assignments.filter((a) => a.status === "Đã nộp" || a.status === "Đang chấm").length },
+              { key: "graded", label: "Đã chấm", count: assignments.filter((a) => a.status === "Đã chấm").length },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                className={`pb-3 font-medium text-sm transition-colors relative ${
+                  activeTab === tab.key
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label} ({tab.count})
+                {activeTab === tab.key && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"></div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Assignments Table */}
+      <AssignmentTable
+        assignments={filteredAssignments}
+        userRole={userRole}
+        canManageContent={canManageContent(userRole)}
+        canSubmitWork={canSubmitWork(userRole)}
+        canViewAllSubmissions={canViewAllSubmissions(userRole)}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+
+      {filteredAssignments.length === 0 && (
+        <div className="text-center py-12">
+          <CheckCircle2 className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">Không có bài tập nào</p>
+        </div>
+      )}
+
+      {/* Create Modal */}
+      <AssignmentFormModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Tạo bài tập mới"
+        formData={formData}
+        onFormDataChange={setFormData}
+        onSubmit={handleSaveCreate}
+        submitLabel="Tạo bài tập"
+      />
+
+      {/* Edit Modal */}
+      <AssignmentFormModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Chỉnh sửa bài tập"
+        formData={formData}
+        onFormDataChange={setFormData}
+        onSubmit={handleSaveEdit}
+        submitLabel="Lưu thay đổi"
+      />
+
+      {/* Delete Modal */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Xác nhận xóa"
+      >
+        <div className="space-y-4">
+          <p className="text-muted-foreground">
+            Bạn có chắc chắn muốn xóa bài tập <strong>{selectedAssignment?.name}</strong>?
+            Hành động này không thể hoàn tác.
+          </p>
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleConfirmDelete}
+              className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Xóa
+            </button>
+            <button
+              onClick={() => setShowDeleteModal(false)}
+              className="px-4 py-2 border border-input rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
