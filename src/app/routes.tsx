@@ -70,11 +70,11 @@ export const router = createBrowserRouter([
       { path: "classes/:id", Component: ClassDetail },
       { path: "schedule", Component: Schedule },
 
-      // Manage (Teacher/Admin only)
+      // Manage (Admin only)
       {
         path: "reports",
         element: (
-          <ProtectedRoute allowedRoles={["teacher", "admin"]}>
+          <ProtectedRoute allowedRoles={["admin"]}>
             <Reports />
           </ProtectedRoute>
         ),

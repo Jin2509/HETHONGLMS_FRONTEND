@@ -1,148 +1,196 @@
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Users, BookOpen, TrendingUp, FileCheck, Download } from "lucide-react";
+import { useState } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import { Users, BookOpen, ClipboardList, GraduationCap, Calendar, History, Search, Filter } from "lucide-react";
+import { Badge } from "../../../components/shared";
 
-const stats = [
-  { label: "Tổng người dùng", value: "1,234", icon: Users, change: "+12%" },
-  { label: "Khóa học hoạt động", value: "48", icon: BookOpen, change: "+8%" },
-  { label: "Tỷ lệ hoàn thành", value: "78%", icon: TrendingUp, change: "+5%" },
-  { label: "Bài nộp tháng này", value: "892", icon: FileCheck, change: "+15%" },
+// 1. Dữ liệu mẫu cơ cấu người dùng
+const userData = [
+  { name: "Sinh viên", value: 850, color: "#3B82F6" },
+  { name: "Giảng viên", value: 45, color: "#10B981" },
+  { name: "Quản trị viên", value: 5, color: "#F59E0B" },
 ];
 
-const enrollmentData = [
-  { id: 1, month: "T1", students: 850 },
-  { id: 2, month: "T2", students: 920 },
-  { id: 3, month: "T3", students: 1050 },
-  { id: 4, month: "T4", students: 1120 },
-  { id: 5, month: "T5", students: 1180 },
-  { id: 6, month: "T6", students: 1234 },
+// 2. Dữ liệu mẫu thống kê theo lớp học
+const classStatsData = [
+  { id: 1, className: "Web Development - Class A", assignments: 12, exams: 2, semester: "HK2 2025" },
+  { id: 2, className: "Data Structures - Class B", assignments: 8, exams: 1, semester: "HK2 2025" },
+  { id: 3, className: "Database Systems - Class A", assignments: 10, exams: 2, semester: "HK1 2025" },
+  { id: 4, className: "Software Engineering", assignments: 15, exams: 3, semester: "HK1 2025" },
 ];
 
-const submissionData = [
-  { id: 1, course: "Web Dev", count: 245 },
-  { id: 2, course: "DSA", count: 198 },
-  { id: 3, course: "Database", count: 176 },
-  { id: 4, course: "UI/UX", count: 154 },
-  { id: 5, course: "ML", count: 119 },
+// 3. Dữ liệu mẫu lịch sử cập nhật (Audit Log)
+const auditLogs = [
+  { id: 1, action: "Thêm mới", target: "Người dùng", detail: "Tạo tài khoản 'Nguyễn Văn A' (Sinh viên)", user: "Admin", time: "2026-06-05 09:30" },
+  { id: 2, action: "Chỉnh sửa", target: "Người dùng", detail: "Cập nhật quyền 'Trần Thị B' thành Giảng viên", user: "Admin", time: "2026-06-05 10:15" },
+  { id: 3, action: "Xóa", target: "Người dùng", detail: "Xóa tài khoản 'Lê Văn C'", user: "Admin", time: "2026-06-04 15:45" },
+  { id: 4, action: "Thêm mới", target: "Lớp học", detail: "Tạo lớp 'Mobile App Design'", user: "Admin", time: "2026-06-04 14:00" },
 ];
+
+const semesters = ["HK2 2025", "HK1 2025", "HK2 2024", "HK1 2024"];
 
 export function Reports() {
+  const [selectedSemester, setSelectedSemester] = useState("HK2 2025");
+  const [dateRange, setDateRange] = useState({ start: "", end: "" });
+
+  const filteredClassStats = classStatsData.filter(item => item.semester === selectedSemester);
+
   return (
-    <div className="animate-fade-in">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Báo cáo</h1>
-        <p className="text-muted-foreground">Thống kê và phân tích dữ liệu hệ thống</p>
+    <div className="animate-fade-in space-y-8">
+      {/* Header & Global Filters */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-card border border-border p-6 rounded-2xl shadow-sm">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Thống kê hệ thống</h1>
+          <p className="text-muted-foreground italic text-sm">Dữ liệu phân tích chuyên sâu cho Quản trị viên</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-4">
+          {/* Học kỳ filter */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase">Học kỳ</label>
+            <select 
+              value={selectedSemester}
+              onChange={(e) => setSelectedSemester(e.target.value)}
+              className="px-4 py-2 bg-background border border-input rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none"
+            >
+              {semesters.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+
+          {/* Thời gian filter */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase">Từ ngày</label>
+            <input 
+              type="date" 
+              className="px-4 py-2 bg-background border border-input rounded-xl text-sm outline-none"
+              onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-muted-foreground uppercase">Đến ngày</label>
+            <input 
+              type="date" 
+              className="px-4 py-2 bg-background border border-input rounded-xl text-sm outline-none"
+              onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-card border border-border rounded-xl p-5 shadow-sm"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div className="p-3 bg-primary/10 rounded-lg">
-                <stat.icon className="w-5 h-5 text-primary" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* User Distribution Chart */}
+        <div className="lg:col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            Cơ cấu người dùng
+          </h2>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={userData}
+                  innerRadius={60}
+                  outerRadius={100}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {userData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                />
+                <Legend verticalAlign="bottom" height={36}/>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {userData.map(item => (
+              <div key={item.name} className="text-center p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <p className="text-xs text-muted-foreground mb-1">{item.name}</p>
+                <p className="text-lg font-bold" style={{ color: item.color }}>{item.value}</p>
               </div>
-              <span className="text-xs text-success font-medium">{stat.change}</span>
-            </div>
-            <div className="text-2xl font-bold mb-1">{stat.value}</div>
-            <div className="text-sm text-muted-foreground">{stat.label}</div>
+            ))}
           </div>
-        ))}
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Xu hướng đăng ký</h2>
-            <button className="text-sm text-primary hover:underline">6 tháng</button>
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={enrollmentData} id="enrollment-chart">
-              <defs>
-                <linearGradient id="enrollmentGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey="month" stroke="#6B7280" fontSize={12} />
-              <YAxis stroke="#6B7280" fontSize={12} />
-              <Tooltip />
-              <Area
-                type="monotone"
-                dataKey="students"
-                stroke="#3B82F6"
-                strokeWidth={2}
-                fill="url(#enrollmentGradient)"
-                name="Sinh viên"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Bài nộp theo khóa học</h2>
-            <button className="p-2 hover:bg-slate-100 rounded-lg">
-              <Download className="w-4 h-4" />
-            </button>
+        {/* Class & Learning Content Stats */}
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-bold flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-primary" />
+              Thống kê lớp học & Nội dung ({selectedSemester})
+            </h2>
+            <Badge variant="primary">{filteredClassStats.length} Lớp học</Badge>
           </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={submissionData} layout="vertical" id="submission-chart">
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis type="number" stroke="#6B7280" fontSize={12} />
-              <YAxis dataKey="course" type="category" stroke="#6B7280" fontSize={12} />
-              <Tooltip />
-              <Bar dataKey="count" fill="#3B82F6" radius={[0, 4, 4, 0]} name="Số lượng" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Top Performers */}
-      <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-        <h2 className="text-lg font-semibold mb-4">Sinh viên xuất sắc</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b border-border">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                  Hạng
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                  Sinh viên
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                  GPA
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                  Hoàn thành
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {[
-                { rank: 1, name: "Nguyễn Văn A", gpa: 9.5, completion: 98 },
-                { rank: 2, name: "Trần Thị B", gpa: 9.3, completion: 96 },
-                { rank: 3, name: "Lê Văn C", gpa: 9.1, completion: 95 },
-              ].map((student) => (
-                <tr key={student.rank} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <span className="font-bold text-primary">#{student.rank}</span>
-                  </td>
-                  <td className="px-4 py-3 font-medium">{student.name}</td>
-                  <td className="px-4 py-3">
-                    <span className="font-semibold text-success">{student.gpa}</span>
-                  </td>
-                  <td className="px-4 py-3">{student.completion}%</td>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 border-b border-border">
+                <tr>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Tên lớp học</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-center">Bài tập</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-center">Kỳ thi</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-right">Tổng nội dung</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredClassStats.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-4 py-4 font-medium text-sm">{item.className}</td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                        <ClipboardList className="w-3 h-3" /> {item.assignments}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-center">
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                        <Calendar className="w-3 h-3" /> {item.exams}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-right font-bold text-slate-700">
+                      {item.assignments + item.exams}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
+      </div>
+
+      {/* Audit Log / Activity History */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+        <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+          <History className="w-5 h-5 text-primary" />
+          Lịch sử cập nhật hệ thống (Người dùng)
+        </h2>
+        <div className="space-y-4">
+          {auditLogs.map((log) => (
+            <div key={log.id} className="flex items-start gap-4 p-4 rounded-xl border border-slate-100 hover:bg-slate-50/80 transition-colors">
+              <div className={`mt-1 p-2 rounded-lg ${
+                log.action === "Thêm mới" ? "bg-green-100 text-green-600" :
+                log.action === "Chỉnh sửa" ? "bg-blue-100 text-blue-600" : "bg-red-100 text-red-600"
+              }`}>
+                <Filter className="w-4 h-4" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-sm">{log.action} {log.target}</span>
+                  <span className="text-xs text-muted-foreground font-mono">{log.time}</span>
+                </div>
+                <p className="text-sm text-slate-600">{log.detail}</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Thực hiện bởi:</span>
+                  <span className="text-xs font-medium text-primary bg-primary/5 px-2 py-0.5 rounded-full">{log.user}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="w-full mt-6 py-3 border border-dashed border-border rounded-xl text-sm font-medium text-muted-foreground hover:bg-slate-50 transition-colors">
+          Xem tất cả lịch sử hoạt động
+        </button>
       </div>
     </div>
   );

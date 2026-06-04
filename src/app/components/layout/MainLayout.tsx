@@ -102,45 +102,20 @@ export function MainLayout() {
   // Filter navigation based on user role
   const filteredGroups = navigationGroups.filter((group) => {
     if (group.label === "QUẢN TRỊ") {
-      return user?.role === "teacher" || user?.role === "admin";
+      // Báo cáo chỉ dành cho Admin, trang Admin chỉ dành cho Admin
+      return user?.role === "admin";
     }
     return true;
   });
 
   const filteredNavigationGroups = filteredGroups.map((group) => {
-    // QUẢN TRỊ group: only show Reports to teacher/admin, Admin to admin only
-    if (group.label === "QUẢN TRỊ") {
+    // ASSESSMENT group: hide Grades for admin and teacher
+    if (group.label === "ĐÁNH GIÁ") {
       return {
         ...group,
         items: group.items.filter((item) => {
-          if (item.path === "/admin") {
-            return user?.role === "admin";
-          }
-          return true;
-        }),
-      };
-    }
-
-    // LEARNING group: hide Schedule for admin
-    if (group.label === "LEARNING") {
-      return {
-        ...group,
-        items: group.items.filter((item) => {
-          if (item.path === "/schedule" && user?.role === "admin") {
-            return false;
-          }
-          return true;
-        }),
-      };
-    }
-
-    // ASSESSMENT group: hide Grades for admin
-    if (group.label === "ASSESSMENT") {
-      return {
-        ...group,
-        items: group.items.filter((item) => {
-          if (item.path === "/grades" && user?.role === "admin") {
-            return false;
+          if (item.path === "/grades") {
+            return user?.role === "student";
           }
           return true;
         }),
