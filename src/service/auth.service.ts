@@ -28,7 +28,6 @@ export interface User {
 }
 
 export async function login(data: LoginRequest): Promise<LoginResponse> {
-  // TODO: connect to real API
   const response = await apiClient.post<LoginResponse>(ENDPOINTS.AUTH.LOGIN, data);
   return response.data;
 }
