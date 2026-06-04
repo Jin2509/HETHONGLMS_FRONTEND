@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router";
-import { Calendar, Clock, FileCheck, Eye, Play, Plus, Pencil, Trash2, Upload, FileText, X, ClipboardCheck } from "lucide-react";
+import { Calendar, Clock, FileCheck, Eye, Play, Plus, Pencil, Trash2, Upload, FileText, X, ClipboardCheck, Search } from "lucide-react";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { getVietnamDateInputValue, getVietnamTimeInputValue } from "../../../utils/datetime";
@@ -45,6 +45,8 @@ const exams = [
 export function ExamsList() {
   const { user } = useAuth();
   const userRole = user?.role || "student";
+  const [activeTab, setActiveTab] = useState<"all" | "pending" | "finished">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -58,6 +60,19 @@ export function ExamsList() {
     description: "",
     totalPoints: 10,
     attachments: [] as File[],
+  });
+
+  const filteredExams = exams.filter((exam) => {
+    // Search filter
+    const matchesSearch = exam.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         exam.course.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    // Status filter
+    if (activeTab === "all") return true;
+    if (activeTab === "pending") return exam.status === "Chưa làm";
+    if (activeTab === "finished") return exam.status === "Đã làm";
+    return true;
   });
 
   const handleCreate = () => {
@@ -152,9 +167,48 @@ export function ExamsList() {
         )}
       </div>
 
+      {/* Filters & Search */}
+      <div className="mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex-1 w-full max-w-md relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Tìm kiếm bài kiểm tra hoặc môn học..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-card border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        <div className="border-b border-border w-full md:w-auto">
+          <div className="flex gap-6">
+            {[
+              { key: "all", label: "Tất cả" },
+              { key: "pending", label: "Chưa làm" },
+              { key: "finished", label: "Đã làm" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as any)}
+                className={`pb-3 font-medium text-sm transition-colors relative ${
+                  activeTab === tab.key
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+                {activeTab === tab.key && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"></div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Exams Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {exams.map((exam) => (
+        {filteredExams.map((exam) => (
           <div
             key={exam.id}
             className="bg-card border border-border rounded-xl p-6 shadow-sm card-hover relative group"
@@ -539,7 +593,7 @@ export function ExamsList() {
               onClick={handleConfirmDelete}
               className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
             >
-              Xóa
+              Xóa ngay
             </button>
             <button
               onClick={() => setShowDeleteModal(false)}

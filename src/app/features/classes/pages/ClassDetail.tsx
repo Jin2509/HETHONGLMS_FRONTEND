@@ -106,6 +106,27 @@ const mockGlobalStudents: Student[] = [
     email: "dangvang@student.edu",
     department: "Ngôn ngữ Anh",
   },
+  {
+    id: 8,
+    studentId: "20210008",
+    name: "Lý Văn H",
+    email: "lyvanh@student.edu",
+    department: "Luật",
+  },
+  {
+    id: 9,
+    studentId: "20210009",
+    name: "Trương Thị I",
+    email: "truongthii@student.edu",
+    department: "Y đa khoa",
+  },
+  {
+    id: 10,
+    studentId: "20210010",
+    name: "Đỗ Văn K",
+    email: "dovank@student.edu",
+    department: "Kiến trúc",
+  },
 ];
 
 const materials = [
@@ -298,13 +319,23 @@ export function ClassDetail() {
         return (
           <button
             onClick={() => handleToggleStudent(row)}
-            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
               isMember 
-                ? "bg-red-50 text-red-600 hover:bg-red-100" 
-                : "bg-primary/10 text-primary hover:bg-primary/20"
+                ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200" 
+                : "bg-primary text-primary-foreground hover:opacity-90 shadow-sm"
             }`}
           >
-            {isMember ? "Xóa khỏi lớp" : "Thêm vào lớp"}
+            {isMember ? (
+              <>
+                <Trash2 className="w-3.5 h-3.5" />
+                Xóa khỏi lớp
+              </>
+            ) : (
+              <>
+                <Plus className="w-3.5 h-3.5" />
+                Thêm vào lớp
+              </>
+            )}
           </button>
         );
       },

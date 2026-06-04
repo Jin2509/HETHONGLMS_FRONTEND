@@ -3,6 +3,7 @@ import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Download, Upload, Fil
 import { Modal, Badge, DataTable, EmptyState } from "../../../components/shared";
 import type { Column } from "../../../components/shared";
 import * as XLSX from "xlsx";
+import { toast } from "sonner";
 
 interface User {
   id: number;
@@ -124,6 +125,9 @@ export function AdminUsers() {
     setUsers([...users, newUser]);
     setShowCreateModal(false);
     resetForm();
+    toast.success("Tạo người dùng thành công", {
+      description: `Tài khoản của "${newUser.name}" đã được tạo.`,
+    });
   };
 
   const handleEdit = () => {
@@ -146,13 +150,20 @@ export function AdminUsers() {
     setShowEditModal(false);
     setSelectedUser(null);
     resetForm();
+    toast.success("Cập nhật thành công", {
+      description: "Thông tin người dùng đã được lưu lại.",
+    });
   };
 
   const handleDelete = () => {
     if (!selectedUser) return;
+    const userName = selectedUser.name;
     setUsers(users.filter((user) => user.id !== selectedUser.id));
     setShowDeleteModal(false);
     setSelectedUser(null);
+    toast.success("Xóa thành công", {
+      description: `Người dùng "${userName}" đã bị xóa khỏi hệ thống.`,
+    });
   };
 
   const resetForm = () => {
@@ -686,7 +697,7 @@ export function AdminUsers() {
               onClick={handleDelete}
               className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90"
             >
-              Xóa
+              Xóa ngay
             </button>
           </>
         }

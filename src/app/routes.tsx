@@ -55,7 +55,14 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
-      { path: "grades", Component: Grades },
+      { 
+        path: "grades", 
+        element: (
+          <ProtectedRoute allowedRoles={["student"]}>
+            <Grades />
+          </ProtectedRoute>
+        ),
+      },
 
       // Community
       { path: "discussions", Component: Discussions },

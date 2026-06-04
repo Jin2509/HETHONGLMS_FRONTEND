@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, CheckCircle2 } from "lucide-react";
+import { Plus, CheckCircle2, Search } from "lucide-react";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { getVietnamDateInputValue } from "../../../utils/datetime";
@@ -56,6 +56,7 @@ export function AssignmentListPage() {
   const { user } = useAuth();
   const userRole = user?.role || "student";
   const [activeTab, setActiveTab] = useState<"all" | "pending" | "submitted" | "graded">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -71,6 +72,12 @@ export function AssignmentListPage() {
   });
 
   const filteredAssignments = assignments.filter((assignment) => {
+    // Search filter
+    const matchesSearch = assignment.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         assignment.course.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    // Status filter
     if (activeTab === "all") return true;
     if (activeTab === "pending") return assignment.status === "Chưa nộp";
     if (activeTab === "submitted") return assignment.status === "Đã nộp" || assignment.status === "Đang chấm";
@@ -159,9 +166,20 @@ export function AssignmentListPage() {
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="mb-6">
-        <div className="border-b border-border">
+      {/* Filters & Search */}
+      <div className="mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+        <div className="flex-1 w-full max-w-md relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Tìm kiếm bài tập hoặc môn học..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-card border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        <div className="border-b border-border w-full md:w-auto">
           <div className="flex gap-6">
             {[
               { key: "all", label: "Tất cả", count: assignments.length },
@@ -178,7 +196,7 @@ export function AssignmentListPage() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {tab.label} ({tab.count})
+                {tab.label}
                 {activeTab === tab.key && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"></div>
                 )}

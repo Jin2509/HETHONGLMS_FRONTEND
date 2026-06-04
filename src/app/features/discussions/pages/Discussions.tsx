@@ -396,7 +396,7 @@ export function Discussions() {
               onClick={handleConfirmDelete}
               className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
             >
-              Xóa
+              Xóa ngay
             </button>
             <button
               onClick={() => setShowDeleteModal(false)}
