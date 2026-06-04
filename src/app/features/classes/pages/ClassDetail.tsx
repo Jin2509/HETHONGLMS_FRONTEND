@@ -18,12 +18,14 @@ import {
   Pencil,
   Trash2,
   Play,
+  Upload,
+  FileUp,
 } from "lucide-react";
 import { Badge, DataTable, Modal } from "../../../components/shared";
 import type { Column } from "../../../components/shared";
 import { toast } from "sonner";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canViewAllSubmissions } from "../../../utils/permissions";
+import { canViewAllSubmissions, canManageContent } from "../../../utils/permissions";
 
 interface Student {
   id: number;
@@ -49,7 +51,7 @@ const classData = {
   endDate: "2026-06-15",
 };
 
-const students: Student[] = [
+const initialStudents: Student[] = [
   {
     id: 1,
     studentId: "20210001",
@@ -77,6 +79,32 @@ const students: Student[] = [
     name: "Phạm Thị D",
     email: "phamthid@student.edu",
     department: "Công nghệ thông tin",
+  },
+];
+
+// Mock global students database for searching
+const mockGlobalStudents: Student[] = [
+  ...initialStudents,
+  {
+    id: 5,
+    studentId: "20210005",
+    name: "Hoàng Văn E",
+    email: "hoangvane@student.edu",
+    department: "Công nghệ thông tin",
+  },
+  {
+    id: 6,
+    studentId: "20210006",
+    name: "Vũ Thị F",
+    email: "vuthif@student.edu",
+    department: "Kinh tế",
+  },
+  {
+    id: 7,
+    studentId: "20210007",
+    name: "Đặng Văn G",
+    email: "dangvang@student.edu",
+    department: "Ngôn ngữ Anh",
   },
 ];
 
@@ -127,9 +155,11 @@ export function ClassDetail() {
   
   const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses" | "materials" | "announcements">("overview");
   const [searchQuery, setSearchQuery] = useState("");
+  const [classStudents, setClassStudents] = useState<Student[]>(initialStudents);
   const [showCreateCourseModal, setShowCreateCourseModal] = useState(false);
   const [showEditCourseModal, setShowEditCourseModal] = useState(false);
   const [showDeleteCourseModal, setShowDeleteCourseModal] = useState(false);
+  const [showUploadMaterialModal, setShowUploadMaterialModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<any>(null);
   const [courseFormData, setCourseFormData] = useState({
     name: "",
@@ -138,16 +168,50 @@ export function ClassDetail() {
     lessons: 20,
     duration: "",
   });
+  const [materialFormData, setMaterialFormData] = useState({
+    name: "",
+    type: "PDF",
+    file: null as File | null,
+  });
 
-  const filteredStudents = students.filter(
-    (student) =>
-      student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      student.studentId.includes(searchQuery)
-  );
+  const filteredStudents = searchQuery.trim() === ""
+    ? classStudents
+    : mockGlobalStudents.filter(
+        (student) =>
+          student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          student.studentId.includes(searchQuery)
+      );
+
+  const handleToggleStudent = (student: Student) => {
+    const isMember = classStudents.some((s) => s.id === student.id);
+    if (isMember) {
+      setClassStudents(classStudents.filter((s) => s.id !== student.id));
+      toast.success(`Đã xóa ${student.name} khỏi lớp học`);
+    } else {
+      setClassStudents([...classStudents, student]);
+      toast.success(`Đã thêm ${student.name} vào lớp học`);
+    }
+  };
 
   const handleCreateCourse = () => {
     setCourseFormData({ name: "", description: "", thumbnail: "", lessons: 20, duration: "" });
     setShowCreateCourseModal(true);
+  };
+
+  const handleUploadMaterial = () => {
+    setMaterialFormData({ name: "", type: "PDF", file: null });
+    setShowUploadMaterialModal(true);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // MOCK: Giả lập đọc file Excel và lấy danh sách MSSV
+      toast.info(`Đang xử lý file: ${file.name}`);
+      setTimeout(() => {
+        toast.success(`Đã nhập dữ liệu thành công từ file ${file.name}`);
+      }, 1000);
+    }
   };
 
   const handleEditCourse = (course: any) => {
@@ -192,6 +256,14 @@ export function ClassDetail() {
     });
   };
 
+  const handleSaveUploadMaterial = () => {
+    // TODO: Gọi API upload tài liệu
+    setShowUploadMaterialModal(false);
+    toast.success("Tải lên tài liệu thành công", {
+      description: `Tài liệu "${materialFormData.name}" đã được lưu`,
+    });
+  };
+
   const columns: Column<Student>[] = [
     {
       key: "studentId",
@@ -217,9 +289,25 @@ export function ClassDetail() {
       ),
     },
     {
-      key: "department",
-      label: "Khoa",
-      sortable: true,
+      key: "id",
+      label: "Thao tác",
+      render: (_, row) => {
+        const isMember = classStudents.some((s) => s.id === row.id);
+        if (!canManageContent(userRole)) return null;
+        
+        return (
+          <button
+            onClick={() => handleToggleStudent(row)}
+            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+              isMember 
+                ? "bg-red-50 text-red-600 hover:bg-red-100" 
+                : "bg-primary/10 text-primary hover:bg-primary/20"
+            }`}
+          >
+            {isMember ? "Xóa khỏi lớp" : "Thêm vào lớp"}
+          </button>
+        );
+      },
     },
   ];
 
@@ -406,21 +494,23 @@ export function ClassDetail() {
 
       {activeTab === "students" && (
         <div>
-          <div className="flex items-center gap-4 mb-6">
+          <div className="flex items-center justify-between mb-6">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Tìm kiếm theo tên hoặc MSSV..."
+                placeholder={canManageContent(userRole) ? "Tìm kiếm MSSV hoặc tên để thêm..." : "Tìm kiếm sinh viên..."}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 bg-card border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-card border border-input rounded-lg hover:bg-slate-50">
-              <Download className="w-4 h-4" />
-              Xuất Excel
-            </button>
+            <div className="flex gap-2">
+              <button className="flex items-center gap-2 px-4 py-2 bg-card border border-input rounded-lg hover:bg-slate-50 text-sm font-medium">
+                <Download className="w-4 h-4" />
+                Xuất Excel
+              </button>
+            </div>
           </div>
 
           <DataTable
@@ -438,13 +528,15 @@ export function ClassDetail() {
             <p className="text-muted-foreground">
               Quản lý các khóa học trong lớp {classData.name}
             </p>
-            <button
-              onClick={handleCreateCourse}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="font-medium">Tạo khóa học</span>
-            </button>
+            {canManageContent(userRole) && (
+              <button
+                onClick={handleCreateCourse}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="font-medium">Tạo khóa học</span>
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -472,20 +564,24 @@ export function ClassDetail() {
                     </span>
                   </div>
                   <div className="absolute top-3 left-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => handleEditCourse(course)}
-                      className="p-2 bg-white rounded-lg hover:bg-slate-100 transition-colors"
-                      title="Chỉnh sửa"
-                    >
-                      <Pencil className="w-4 h-4 text-slate-700" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteCourse(course)}
-                      className="p-2 bg-white rounded-lg hover:bg-red-50 transition-colors"
-                      title="Xóa"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-600" />
-                    </button>
+                    {canManageContent(userRole) && (
+                      <>
+                        <button
+                          onClick={() => handleEditCourse(course)}
+                          className="p-2 bg-white rounded-lg hover:bg-slate-100 transition-colors"
+                          title="Chỉnh sửa"
+                        >
+                          <Pencil className="w-4 h-4 text-slate-700" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCourse(course)}
+                          className="p-2 bg-white rounded-lg hover:bg-red-50 transition-colors"
+                          title="Xóa"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -549,6 +645,17 @@ export function ClassDetail() {
 
       {activeTab === "materials" && (
         <div className="space-y-4">
+          {canManageContent(userRole) && (
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={handleUploadMaterial}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              >
+                <Plus className="w-4 h-4" />
+                Thêm tài liệu
+              </button>
+            </div>
+          )}
           {materials.map((material) => (
             <div
               key={material.id}
@@ -783,6 +890,68 @@ export function ClassDetail() {
             </button>
             <button
               onClick={() => setShowDeleteCourseModal(false)}
+              className="px-4 py-2 border border-input rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Upload Material Modal */}
+      <Modal
+        isOpen={showUploadMaterialModal}
+        onClose={() => setShowUploadMaterialModal(false)}
+        title="Thêm tài liệu mới"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Tên tài liệu *</label>
+            <input
+              type="text"
+              value={materialFormData.name}
+              onChange={(e) => setMaterialFormData({ ...materialFormData, name: e.target.value })}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="VD: Slide bài giảng tuần 5"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Loại tài liệu</label>
+            <select
+              value={materialFormData.type}
+              onChange={(e) => setMaterialFormData({ ...materialFormData, type: e.target.value })}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+            >
+              <option value="PDF">PDF</option>
+              <option value="ZIP">ZIP</option>
+              <option value="DOCX">DOCX</option>
+              <option value="PPTX">PPTX</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">File tài liệu *</label>
+            <div className="border-2 border-dashed border-input rounded-lg p-6 text-center hover:border-primary transition-colors cursor-pointer relative">
+              <input
+                type="file"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={(e) => setMaterialFormData({ ...materialFormData, file: e.target.files?.[0] || null })}
+              />
+              <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">
+                {materialFormData.file ? materialFormData.file.name : "Kéo thả hoặc click để chọn file"}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleSaveUploadMaterial}
+              disabled={!materialFormData.name || !materialFormData.file}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Tải lên
+            </button>
+            <button
+              onClick={() => setShowUploadMaterialModal(false)}
               className="px-4 py-2 border border-input rounded-lg hover:bg-slate-50 transition-colors"
             >
               Hủy

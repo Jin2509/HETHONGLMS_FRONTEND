@@ -41,16 +41,23 @@ export function Discussions() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showReplyModal, setShowReplyModal] = useState(false);
   const [selectedThread, setSelectedThread] = useState<any>(null);
   const [formData, setFormData] = useState({
     title: "",
     course: "",
     content: "",
   });
+  const [replyContent, setReplyContent] = useState("");
 
   const handleCreate = () => {
     setFormData({ title: "", course: "", content: "" });
     setShowCreateModal(true);
+  };
+
+  const handleReply = () => {
+    setReplyContent("");
+    setShowReplyModal(true);
   };
 
   const handleEdit = (thread: any, e: React.MouseEvent) => {
@@ -92,6 +99,15 @@ export function Discussions() {
     setShowDeleteModal(false);
     toast.success("Xóa thành công", {
       description: `Thảo luận "${threadTitle}" đã được xóa`,
+    });
+  };
+
+  const handleSaveReply = () => {
+    // TODO: Gọi API trả lời thảo luận
+    console.log("Replying to thread:", replyContent);
+    setShowReplyModal(false);
+    toast.success("Gửi phản hồi thành công", {
+      description: "Câu trả lời của bạn đã được thêm vào thảo luận",
     });
   };
 
@@ -207,7 +223,10 @@ export function Discussions() {
                   </span>
                 </div>
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90">
+              <button 
+                onClick={handleReply}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90"
+              >
                 <Plus className="w-4 h-4" />
                 <span>Trả lời</span>
               </button>
@@ -381,6 +400,45 @@ export function Discussions() {
             </button>
             <button
               onClick={() => setShowDeleteModal(false)}
+              className="px-4 py-2 border border-input rounded-lg hover:bg-slate-50 transition-colors"
+            >
+              Hủy
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Reply Modal */}
+      <Modal
+        isOpen={showReplyModal}
+        onClose={() => setShowReplyModal(false)}
+        title="Trả lời thảo luận"
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-slate-50 rounded-lg border border-border">
+            <h4 className="text-sm font-semibold mb-1">Đang trả lời:</h4>
+            <p className="text-sm text-muted-foreground line-clamp-2">How to optimize React performance?</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Nội dung câu trả lời *</label>
+            <textarea
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+              rows={6}
+              placeholder="Nhập nội dung phản hồi của bạn..."
+            />
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleSaveReply}
+              disabled={!replyContent.trim()}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Gửi trả lời
+            </button>
+            <button
+              onClick={() => setShowReplyModal(false)}
               className="px-4 py-2 border border-input rounded-lg hover:bg-slate-50 transition-colors"
             >
               Hủy
