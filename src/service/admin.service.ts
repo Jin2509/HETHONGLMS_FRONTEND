@@ -17,6 +17,7 @@ export interface CreateUserData {
   email: string;
   password?: string;
   role: "student" | "teacher" | "admin";
+  status?: "active" | "inactive";
   studentId?: string;
   phone?: string;
 }
@@ -27,36 +28,30 @@ export async function getUsers(params?: {
   page?: number;
   limit?: number;
 }): Promise<{ data: User[]; total: number }> {
-  // TODO: connect to real API
   const response = await apiClient.get(ENDPOINTS.USERS.LIST, { params });
   return response.data;
 }
 
 export async function getUser(id: number): Promise<User> {
-  // TODO: connect to real API
   const response = await apiClient.get(ENDPOINTS.USERS.DETAIL(id));
   return response.data;
 }
 
 export async function createUser(data: CreateUserData): Promise<User> {
-  // TODO: connect to real API
   const response = await apiClient.post(ENDPOINTS.USERS.LIST, data);
   return response.data;
 }
 
 export async function updateUser(id: number, data: Partial<CreateUserData>): Promise<User> {
-  // TODO: connect to real API
   const response = await apiClient.patch(ENDPOINTS.USERS.UPDATE(id), data);
   return response.data;
 }
 
 export async function deleteUser(id: number): Promise<void> {
-  // TODO: connect to real API
   await apiClient.delete(ENDPOINTS.USERS.DELETE(id));
 }
 
 export async function importUsers(file: File): Promise<{ imported: number; failed: number }> {
-  // TODO: connect to real API
   const formData = new FormData();
   formData.append("file", file);
   const response = await apiClient.post(ENDPOINTS.USERS.IMPORT, formData, {
@@ -66,7 +61,6 @@ export async function importUsers(file: File): Promise<{ imported: number; faile
 }
 
 export async function exportUsers(): Promise<Blob> {
-  // TODO: connect to real API
   const response = await apiClient.get(ENDPOINTS.USERS.EXPORT, {
     responseType: "blob",
   });

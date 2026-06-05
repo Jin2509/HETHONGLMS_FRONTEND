@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     role ENUM('student', 'teacher', 'admin') NOT NULL DEFAULT 'student',
     status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
-    student_id VARCHAR(50) UNIQUE, -- Also used for Teacher ID
+    user_id VARCHAR(50) UNIQUE, -- Also used for Teacher ID
     phone VARCHAR(20),
     avatar_url VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -2,6 +2,7 @@ export interface Assignment {
   id: number;
   name: string;
   course: string;
+  courseId?: number;
   dueDate: string;
   status: string;
   hoursLeft: number;
@@ -13,6 +14,7 @@ export interface AssignmentDetail {
   id: number;
   name: string;
   course: string;
+  courseId?: number;
   dueDate: string;
   hoursLeft: number;
   description: string;

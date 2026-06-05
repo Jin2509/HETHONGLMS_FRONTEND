@@ -1,76 +1,57 @@
-import { useState } from "react";
-import { Search, MessageSquare, ThumbsUp, Plus, Pencil, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, MessageSquare, ThumbsUp, Plus, Pencil, Trash2, Loader2, User } from "lucide-react";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
-
-const initialThreads = [
-  {
-    id: 1,
-    title: "How to optimize React performance?",
-    author: "Nguyễn Văn A",
-    course: "Web Development",
-    content: "I'm working on a large React application and noticing some performance issues. What are the best practices for optimizing React performance? Any tips on useMemo, useCallback, and React.memo would be appreciated!",
-    replies: 12,
-    likes: 8,
-    time: "2 giờ trước",
-    unread: true,
-  },
-  {
-    id: 2,
-    title: "Best practices for database normalization",
-    author: "Trần Thị B",
-    course: "Database Systems",
-    content: "When designing a complex database schema, how many normal forms should we ideally target? Is 3NF enough for most production applications or should we aim higher?",
-    replies: 5,
-    likes: 3,
-    time: "5 giờ trước",
-    unread: false,
-  },
-  {
-    id: 3,
-    title: "Understanding Big O notation",
-    author: "Lê Văn C",
-    course: "Data Structures",
-    content: "Can someone explain the practical difference between O(n log n) and O(n) in real-world scenarios with large datasets? I'm trying to optimize my sorting algorithm.",
-    replies: 18,
-    likes: 15,
-    time: "1 ngày trước",
-    unread: false,
-  },
-];
+import { useDiscussion } from "../hooks/useDiscussion";
+import { useAuth } from "../../../contexts/AuthContext";
 
 export function Discussions() {
+  const { user } = useAuth();
   const [filter, setFilter] = useState<"all" | "unread" | "mine">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [threadsList, setThreadsList] = useState(initialThreads);
+  const {
+    discussions,
+    discussionDetail,
+    loading,
+    fetchDiscussions,
+    fetchDiscussionDetail,
+    createNewDiscussion,
+    updateExistingDiscussion,
+    removeDiscussion,
+    addReply,
+    toggleLikeDiscussion,
+  } = useDiscussion();
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showReplyModal, setShowReplyModal] = useState(false);
-  const [selectedThread, setSelectedThread] = useState<any>(initialThreads[0]);
+  const [selectedThread, setSelectedThread] = useState<any>(null);
   const [formData, setFormData] = useState({
     title: "",
-    course: "",
+    courseId: 1, // MOCK default courseId
     content: "",
   });
   const [replyContent, setReplyContent] = useState("");
 
-  const filteredThreads = threadsList.filter((thread) => {
-    // Search filter
-    const matchesSearch = 
-      thread.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      thread.course.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (!matchesSearch) return false;
+  useEffect(() => {
+    fetchDiscussions({ filter, query: searchQuery });
+  }, [fetchDiscussions, filter, searchQuery]);
 
-    // Tab filter
-    if (filter === "unread") return thread.unread;
-    if (filter === "mine") return thread.author === "Admin"; // Giả lập "Của tôi" cho Admin
-    return true;
-  });
+  useEffect(() => {
+    if (discussions.length > 0 && !selectedThread) {
+      setSelectedThread(discussions[0]);
+    }
+  }, [discussions, selectedThread]);
+
+  useEffect(() => {
+    if (selectedThread?.id) {
+      fetchDiscussionDetail(selectedThread.id);
+    }
+  }, [selectedThread?.id, fetchDiscussionDetail]);
 
   const handleCreate = () => {
-    setFormData({ title: "", course: "", content: "" });
+    setFormData({ title: "", courseId: 1, content: "" });
     setShowCreateModal(true);
   };
 
@@ -84,7 +65,7 @@ export function Discussions() {
     setSelectedThread(thread);
     setFormData({
       title: thread.title,
-      course: thread.course,
+      courseId: thread.courseId || 1,
       content: thread.content || "",
     });
     setShowEditModal(true);
@@ -96,74 +77,54 @@ export function Discussions() {
     setShowDeleteModal(true);
   };
 
-  const handleSaveCreate = () => {
-    const newThread = {
-      id: threadsList.length + 1,
-      title: formData.title,
-      course: formData.course,
-      content: formData.content,
-      author: "Admin", // Giả lập người tạo là Admin
-      replies: 0,
-      likes: 0,
-      time: "Vừa xong",
-      unread: false,
-    };
-    setThreadsList([newThread, ...threadsList]);
-    setSelectedThread(newThread);
-    setShowCreateModal(false);
-    toast.success("Tạo thảo luận thành công", {
-      description: `Chủ đề "${formData.title}" đã được tạo`,
-    });
-  };
-
-  const handleSaveEdit = () => {
-    setThreadsList(threadsList.map(t => 
-      t.id === selectedThread.id 
-        ? { ...t, title: formData.title, course: formData.course, content: formData.content }
-        : t
-    ));
-    // Cập nhật lại thread đang hiển thị ở bên phải
-    setSelectedThread({ 
-      ...selectedThread, 
-      title: formData.title, 
-      course: formData.course, 
-      content: formData.content 
-    });
-    setShowEditModal(false);
-    toast.success("Cập nhật thành công", {
-      description: "Thông tin thảo luận đã được lưu",
-    });
-  };
-
-  const handleConfirmDelete = () => {
-    const threadTitle = selectedThread?.title;
-    const newThreads = threadsList.filter(t => t.id !== selectedThread.id);
-    setThreadsList(newThreads);
-    
-    // Nếu xóa thread đang chọn, chuyển sang thread đầu tiên còn lại
-    if (newThreads.length > 0) {
-      setSelectedThread(newThreads[0]);
-    } else {
-      setSelectedThread(null);
+  const handleSaveCreate = async () => {
+    try {
+      await createNewDiscussion(formData);
+      setShowCreateModal(false);
+      toast.success("Tạo thảo luận thành công");
+    } catch (error) {
+      toast.error("Không thể tạo thảo luận");
     }
-    
-    setShowDeleteModal(false);
-    toast.success("Xóa thành công", {
-      description: `Thảo luận "${threadTitle}" đã được xóa`,
-    });
   };
 
-  const handleSaveReply = () => {
-    // MOCK: Tăng số lượng trả lời
-    setThreadsList(threadsList.map(t => 
-      t.id === selectedThread.id ? { ...t, replies: t.replies + 1 } : t
-    ));
-    setSelectedThread({ ...selectedThread, replies: selectedThread.replies + 1 });
-    
-    setShowReplyModal(false);
-    toast.success("Gửi phản hồi thành công", {
-      description: "Câu trả lời của bạn đã được thêm vào thảo luận",
-    });
+  const handleSaveEdit = async () => {
+    if (!selectedThread) return;
+    try {
+      await updateExistingDiscussion(selectedThread.id, formData);
+      setShowEditModal(false);
+      toast.success("Cập nhật thành công");
+    } catch (error) {
+      toast.error("Không thể cập nhật thảo luận");
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedThread) return;
+    try {
+      await removeDiscussion(selectedThread.id);
+      setSelectedThread(null);
+      setShowDeleteModal(false);
+      toast.success("Xóa thành công");
+    } catch (error) {
+      toast.error("Không thể xóa thảo luận");
+    }
+  };
+
+  const handleSaveReply = async () => {
+    if (!selectedThread) return;
+    try {
+      await addReply(selectedThread.id, { content: replyContent });
+      setShowReplyModal(false);
+      toast.success("Gửi phản hồi thành công");
+    } catch (error) {
+      toast.error("Không thể gửi phản hồi");
+    }
+  };
+
+  const handleLike = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    await toggleLikeDiscussion(id);
+    // Real implementation would refresh or update local state
   };
 
   return (
@@ -211,59 +172,74 @@ export function Discussions() {
             ))}
           </div>
 
-          <div className="bg-card border border-border rounded-xl divide-y divide-border">
-            {filteredThreads.map((thread) => (
-              <div
-                key={thread.id}
-                className={`relative group ${selectedThread?.id === thread.id ? "bg-slate-50" : ""}`}
-              >
-                <button
-                  onClick={() => setSelectedThread(thread)}
-                  className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+          <div className="bg-card border border-border rounded-xl divide-y divide-border min-h-[200px] flex flex-col">
+            {loading && discussions.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center p-8">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              </div>
+            ) : discussions.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center p-8 text-center text-muted-foreground">
+                <p>Không tìm thấy thảo luận nào.</p>
+              </div>
+            ) : (
+              discussions.map((thread) => (
+                <div
+                  key={thread.id}
+                  className={`relative group ${selectedThread?.id === thread.id ? "bg-slate-50" : ""}`}
                 >
-                  <div className="flex items-start gap-3">
-                    {thread.unread && (
-                      <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium mb-1 line-clamp-2">{thread.title}</h3>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="px-2 py-0.5 bg-primary/10 text-primary rounded">
-                          {thread.course}
-                        </span>
-                        <span>{thread.time}</span>
-                      </div>
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <MessageSquare className="w-3 h-3" />
-                          {thread.replies}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <ThumbsUp className="w-3 h-3" />
-                          {thread.likes}
-                        </span>
+                  <button
+                    onClick={() => setSelectedThread(thread)}
+                    className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      {thread.unread && (
+                        <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium mb-1 line-clamp-2">{thread.title}</h3>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="px-2 py-0.5 bg-primary/10 text-primary rounded">
+                            {thread.courseName || "Khóa học"}
+                          </span>
+                          <span>{thread.time}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <MessageSquare className="w-3 h-3" />
+                            {thread.repliesCount}
+                          </span>
+                          <span 
+                            className="flex items-center gap-1 hover:text-primary transition-colors"
+                            onClick={(e) => handleLike(e, thread.id)}
+                          >
+                            <ThumbsUp className="w-3 h-3" />
+                            {thread.likesCount}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-                <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={(e) => handleEdit(thread, e)}
-                    className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
-                    title="Chỉnh sửa"
-                  >
-                    <Pencil className="w-3 h-3 text-slate-700" />
                   </button>
-                  <button
-                    onClick={(e) => handleDelete(thread, e)}
-                    className="p-1.5 bg-red-50 hover:bg-red-100 rounded transition-colors"
-                    title="Xóa"
-                  >
-                    <Trash2 className="w-3 h-3 text-red-600" />
-                  </button>
+                  {user?.role === "admin" && (
+                    <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => handleEdit(thread, e)}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded transition-colors"
+                        title="Chỉnh sửa"
+                      >
+                        <Pencil className="w-3 h-3 text-slate-700" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(thread, e)}
+                        className="p-1.5 bg-red-50 hover:bg-red-100 rounded transition-colors"
+                        title="Xóa"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-600" />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -274,11 +250,14 @@ export function Discussions() {
                 <div>
                   <h2 className="text-2xl font-bold mb-2">{selectedThread.title}</h2>
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                    <span>{selectedThread.author}</span>
+                    <div className="flex items-center gap-1">
+                      <User className="w-4 h-4" />
+                      <span>{selectedThread.authorName}</span>
+                    </div>
                     <span>•</span>
                     <span>{selectedThread.time}</span>
                     <span className="px-2 py-0.5 bg-primary/10 text-primary rounded">
-                      {selectedThread.course}
+                      {selectedThread.courseName || "Khóa học"}
                     </span>
                   </div>
                 </div>
@@ -293,41 +272,39 @@ export function Discussions() {
 
               <div className="prose max-w-none mb-6">
                 <p className="text-muted-foreground">
-                  {selectedThread.content || "Không có nội dung thảo luận."}
+                  {discussionDetail?.content || "Không có nội dung thảo luận."}
                 </p>
               </div>
 
               <div className="border-t border-border pt-6">
-                <h3 className="font-semibold mb-4">{selectedThread.replies} trả lời</h3>
+                <h3 className="font-semibold mb-4">{discussionDetail?.repliesCount || 0} trả lời</h3>
                 <div className="space-y-4">
-                  {selectedThread.id === 1 && (
-                    <div className="p-4 bg-slate-50 rounded-lg">
+                  {discussionDetail?.replies.map((reply) => (
+                    <div key={reply.id} className="p-4 bg-slate-50 rounded-lg">
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm">
-                            GV
+                          <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold">
+                            {(reply.authorName || "U").charAt(0)}
                           </div>
                           <div>
-                            <p className="font-medium text-sm">Dr. Nguyễn Văn B</p>
-                            <p className="text-xs text-muted-foreground">Giảng viên</p>
+                            <p className="font-medium text-sm">{reply.authorName}</p>
+                            <p className="text-xs text-muted-foreground">{reply.authorRole || "Thành viên"}</p>
                           </div>
                         </div>
-                        <span className="text-xs text-muted-foreground">1 giờ trước</span>
+                        <span className="text-xs text-muted-foreground">{reply.time}</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Great question! Here are some key optimization techniques: 1) Use React.memo
-                        for components that render often with same props, 2) useCallback for function
-                        references, 3) useMemo for expensive calculations...
+                        {reply.content}
                       </p>
                       <div className="flex items-center gap-4 mt-3">
-                        <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary">
+                        <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
                           <ThumbsUp className="w-3 h-3" />
-                          <span>5</span>
+                          <span>{reply.likesCount}</span>
                         </button>
                       </div>
                     </div>
-                  )}
-                  {selectedThread.replies === 0 && (
+                  ))}
+                  {discussionDetail?.replies.length === 0 && (
                     <div className="py-8 text-center text-muted-foreground italic">
                       Chưa có phản hồi nào cho thảo luận này.
                     </div>
@@ -336,7 +313,7 @@ export function Discussions() {
               </div>
             </div>
           ) : (
-            <div className="bg-card border border-border rounded-xl p-12 text-center">
+            <div className="bg-card border border-border rounded-xl p-12 text-center h-full flex flex-col items-center justify-center">
               <MessageSquare className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-muted-foreground">Chọn một thảo luận để xem chi tiết</p>
             </div>
@@ -362,13 +339,13 @@ export function Discussions() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Môn học *</label>
+            <label className="block text-sm font-medium mb-2">ID Môn học *</label>
             <input
-              type="text"
-              value={formData.course}
-              onChange={(e) => setFormData({ ...formData, course: e.target.value })}
+              type="number"
+              value={formData.courseId}
+              onChange={(e) => setFormData({ ...formData, courseId: parseInt(e.target.value) || 1 })}
               className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Nhập tên môn học"
+              placeholder="Nhập ID môn học"
             />
           </div>
           <div>
@@ -384,8 +361,10 @@ export function Discussions() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveCreate}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Tạo thảo luận
             </button>
             <button
@@ -415,11 +394,11 @@ export function Discussions() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Môn học *</label>
+            <label className="block text-sm font-medium mb-2">ID Môn học *</label>
             <input
-              type="text"
-              value={formData.course}
-              onChange={(e) => setFormData({ ...formData, course: e.target.value })}
+              type="number"
+              value={formData.courseId}
+              onChange={(e) => setFormData({ ...formData, courseId: parseInt(e.target.value) || 1 })}
               className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
@@ -436,8 +415,10 @@ export function Discussions() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveEdit}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Lưu thay đổi
             </button>
             <button
@@ -464,8 +445,10 @@ export function Discussions() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleConfirmDelete}
-              className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Xóa ngay
             </button>
             <button
@@ -502,9 +485,10 @@ export function Discussions() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveReply}
-              disabled={!replyContent.trim()}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!replyContent.trim() || loading}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Gửi trả lời
             </button>
             <button

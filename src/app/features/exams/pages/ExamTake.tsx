@@ -1,52 +1,44 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
-import { Flag, ChevronLeft, ChevronRight, Clock } from "lucide-react";
-
-const questions = [
-  {
-    id: 1,
-    text: "What is the purpose of React hooks?",
-    type: "single",
-    options: [
-      "To add state to functional components",
-      "To style components",
-      "To fetch data from APIs",
-      "To create class components",
-    ],
-  },
-  {
-    id: 2,
-    text: "Which of the following are valid CSS selectors? (Select all that apply)",
-    type: "multiple",
-    options: [".class-name", "#id-name", "element-name", "@attribute"],
-  },
-  {
-    id: 3,
-    text: "What does the 'virtual DOM' refer to in React?",
-    type: "single",
-    options: [
-      "A copy of the real DOM kept in memory",
-      "A CSS framework",
-      "A testing library",
-      "A state management tool",
-    ],
-  },
-];
+import { Flag, ChevronLeft, ChevronRight, Clock, Loader2 } from "lucide-react";
+import { useExam } from "../hooks/useExam";
+import { toast } from "sonner";
 
 export function ExamTake() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const { 
+    examDetail, 
+    loading, 
+    fetchExamDetail, 
+    submitExamAnswers 
+  } = useExam();
+
+  const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState<{ [key: number]: any }>({});
   const [flagged, setFlagged] = useState<Set<number>>(new Set());
-  const [timeLeft, setTimeLeft] = useState(90 * 60); // 90 minutes in seconds
+  const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
+    if (id) {
+      fetchExamDetail(parseInt(id));
+    }
+  }, [id, fetchExamDetail]);
+
+  useEffect(() => {
+    if (examDetail) {
+      setTimeLeft(examDetail.duration * 60);
+    }
+  }, [examDetail]);
+
+  useEffect(() => {
+    if (timeLeft <= 0 && examDetail) return;
+
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleSubmit();
+          handleAutoSubmit();
           return 0;
         }
         return prev - 1;
@@ -54,7 +46,7 @@ export function ExamTake() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [timeLeft, examDetail]);
 
   const handleAnswer = (questionId: number, answer: any) => {
     setAnswers({ ...answers, [questionId]: answer });
@@ -70,24 +62,69 @@ export function ExamTake() {
     setFlagged(newFlagged);
   };
 
-  const handleSubmit = () => {
-    if (confirm("Bạn có chắc chắn muốn nộp bài?")) {
+  const handleAutoSubmit = async () => {
+    if (!id || !examDetail) return;
+    try {
+      await submitExamAnswers(parseInt(id), answers);
+      toast.info("Hết giờ! Bài làm đã được tự động nộp.");
       navigate(`/exams/${id}/result`);
+    } catch (error) {
+      toast.error("Không thể tự động nộp bài. Vui lòng liên hệ giáo viên.");
     }
   };
 
+  const handleSubmit = async () => {
+    if (!id || !examDetail) return;
+    if (confirm("Bạn có chắc chắn muốn nộp bài?")) {
+      try {
+        await submitExamAnswers(parseInt(id), answers);
+        toast.success("Nộp bài thành công!");
+        navigate(`/exams/${id}/result`);
+      } catch (error) {
+        toast.error("Không thể nộp bài. Vui lòng thử lại.");
+      }
+    }
+  };
+
+  if (loading && !examDetail) {
+    return (
+      <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Đang tải đề thi...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!examDetail) {
+    return (
+      <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Không tìm thấy thông tin đề thi.</p>
+          <button onClick={() => navigate("/exams")} className="text-primary hover:underline">
+            Quay lại danh sách
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const questions = examDetail.questions || [];
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const isLowTime = timeLeft < 5 * 60;
 
-  const question = questions[currentQuestion];
+  const question = questions[currentQuestionIdx];
+  if (!question) return null;
+
   const isAnswered = answers[question.id] !== undefined;
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
       {/* Topbar */}
       <div className="h-16 bg-card border-b border-border px-6 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Midterm Exam - Web Development</h1>
+        <h1 className="text-lg font-semibold">{examDetail.name}</h1>
         <div className="flex items-center gap-6">
           <div
             className={`flex items-center gap-2 font-mono text-lg font-medium ${
@@ -104,8 +141,10 @@ export function ExamTake() {
           </div>
           <button
             onClick={handleSubmit}
-            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 font-medium"
+            disabled={loading}
+            className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 font-medium disabled:opacity-50 flex items-center gap-2"
           >
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             Nộp bài
           </button>
         </div>
@@ -122,9 +161,9 @@ export function ExamTake() {
               return (
                 <button
                   key={q.id}
-                  onClick={() => setCurrentQuestion(idx)}
+                  onClick={() => setCurrentQuestionIdx(idx)}
                   className={`aspect-square rounded-lg font-medium text-sm transition-colors ${
-                    currentQuestion === idx
+                    currentQuestionIdx === idx
                       ? "bg-primary text-white"
                       : answered
                       ? "bg-primary/20 text-primary"
@@ -147,7 +186,7 @@ export function ExamTake() {
               <div className="flex items-start justify-between mb-6">
                 <div>
                   <div className="text-sm text-muted-foreground mb-2">
-                    Câu {currentQuestion + 1} / {questions.length}
+                    Câu {currentQuestionIdx + 1} / {questions.length}
                   </div>
                   <h2 className="text-xl font-semibold">{question.text}</h2>
                 </div>
@@ -165,11 +204,11 @@ export function ExamTake() {
 
               <div className="space-y-3">
                 {question.type === "single"
-                  ? question.options.map((option, idx) => (
+                  ? question.options.map((option) => (
                       <label
-                        key={idx}
+                        key={option.id}
                         className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                          answers[question.id] === idx
+                          answers[question.id] === option.id
                             ? "border-primary bg-primary/5"
                             : "border-border hover:border-primary/50"
                         }`}
@@ -177,35 +216,35 @@ export function ExamTake() {
                         <input
                           type="radio"
                           name={`question-${question.id}`}
-                          checked={answers[question.id] === idx}
-                          onChange={() => handleAnswer(question.id, idx)}
+                          checked={answers[question.id] === option.id}
+                          onChange={() => handleAnswer(question.id, option.id)}
                           className="mt-1 w-4 h-4 text-primary"
                         />
-                        <span className="flex-1">{option}</span>
+                        <span className="flex-1">{option.text}</span>
                       </label>
                     ))
-                  : question.options.map((option, idx) => (
+                  : question.options.map((option) => (
                       <label
-                        key={idx}
+                        key={option.id}
                         className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                          answers[question.id]?.includes(idx)
+                          answers[question.id]?.includes(option.id)
                             ? "border-primary bg-primary/5"
                             : "border-border hover:border-primary/50"
                         }`}
                       >
                         <input
                           type="checkbox"
-                          checked={answers[question.id]?.includes(idx) || false}
+                          checked={answers[question.id]?.includes(option.id) || false}
                           onChange={(e) => {
                             const current = answers[question.id] || [];
                             const updated = e.target.checked
-                              ? [...current, idx]
-                              : current.filter((i: number) => i !== idx);
+                              ? [...current, option.id]
+                              : current.filter((i: number) => i !== option.id);
                             handleAnswer(question.id, updated);
                           }}
                           className="mt-1 w-4 h-4 text-primary"
                         />
-                        <span className="flex-1">{option}</span>
+                        <span className="flex-1">{option.text}</span>
                       </label>
                     ))}
               </div>
@@ -216,8 +255,8 @@ export function ExamTake() {
           <div className="border-t border-border p-6">
             <div className="max-w-3xl mx-auto flex gap-4">
               <button
-                onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
-                disabled={currentQuestion === 0}
+                onClick={() => setCurrentQuestionIdx(Math.max(0, currentQuestionIdx - 1))}
+                disabled={currentQuestionIdx === 0}
                 className="flex items-center gap-2 px-6 py-3 bg-card border border-border rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-5 h-5" />
@@ -225,9 +264,9 @@ export function ExamTake() {
               </button>
               <button
                 onClick={() =>
-                  setCurrentQuestion(Math.min(questions.length - 1, currentQuestion + 1))
+                  setCurrentQuestionIdx(Math.min(questions.length - 1, currentQuestionIdx + 1))
                 }
-                disabled={currentQuestion === questions.length - 1}
+                disabled={currentQuestionIdx === questions.length - 1}
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="font-medium">Câu tiếp</span>

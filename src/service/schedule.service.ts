@@ -7,10 +7,11 @@ export interface ScheduleEvent {
   courseId: number;
   courseName?: string;
   type: "lecture" | "lab" | "workshop" | "exam";
-  dayOfWeek: number; // 1 = Monday, 7 = Sunday
+  dayOfWeek: number; // 0 = Monday, 6 = Sunday
   startTime: string; // HH:mm
   endTime: string;
   room?: string;
+  instructor?: string;
   color: string;
 }
 
@@ -30,13 +31,11 @@ export async function getSchedule(params?: {
   month?: string;
   courseId?: number;
 }): Promise<ScheduleEvent[]> {
-  // TODO: connect to real API
   const response = await apiClient.get<ScheduleEvent[]>(ENDPOINTS.SCHEDULE.LIST, { params });
   return response.data;
 }
 
 export async function createEvent(data: CreateEventData): Promise<ScheduleEvent> {
-  // TODO: connect to real API
   const response = await apiClient.post<ScheduleEvent>(ENDPOINTS.SCHEDULE.CREATE, data);
   return response.data;
 }
@@ -45,12 +44,10 @@ export async function updateEvent(
   id: number,
   data: Partial<CreateEventData>
 ): Promise<ScheduleEvent> {
-  // TODO: connect to real API
   const response = await apiClient.patch<ScheduleEvent>(ENDPOINTS.SCHEDULE.UPDATE(id), data);
   return response.data;
 }
 
 export async function deleteEvent(id: number): Promise<void> {
-  // TODO: connect to real API
   await apiClient.delete(ENDPOINTS.SCHEDULE.DELETE(id));
 }

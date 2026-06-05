@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router";
 import {
   ChevronLeft,
@@ -10,48 +10,41 @@ import {
   Plus,
   Trash2,
   File,
+  Loader2,
 } from "lucide-react";
 import { Modal, FileDropzone } from "../../../components/shared";
 import { useAuth } from "../../../contexts/AuthContext";
 import { canManageContent } from "../../../utils/permissions";
 import { toast } from "sonner";
-
-// Dữ liệu mẫu đã được lọc bỏ phần thông báo không cần thiết
-const courseData = {
-  id: 1,
-  name: "Web Development Fundamentals",
-  instructor: "Dr. Nguyễn Văn B",
-  chapters: [
-    {
-      id: 2,
-      name: "Slide bài giảng",
-      materials: [
-        { id: 3, name: "Chương 1: Tổng quan về Web Development", type: "pdf", size: "2.4 MB", date: "2026-02-05" },
-        { id: 5, name: "Chương 2: HTML5 & CSS3 Cơ bản", type: "pdf", size: "3.1 MB", date: "2026-02-12" },
-        { id: 6, name: "Chương 3: Responsive Design với Tailwind CSS", type: "pdf", size: "4.5 MB", date: "2026-02-19" },
-      ],
-    },
-    {
-      id: 3,
-      name: "Tài liệu thực hành",
-      materials: [
-        { id: 7, name: "Bài tập thực hành tuần 1-4", type: "zip", size: "15.2 MB", date: "2026-02-20" },
-        { id: 8, name: "Source code mẫu (React + Vite)", type: "zip", size: "1.2 MB", date: "2026-03-01" },
-      ],
-    },
-  ],
-};
+import { useCourses } from "../hooks/useCourses";
 
 export function CourseDetail() {
   const { id } = useParams();
+  const courseId = Number(id);
   const { user } = useAuth();
   const userRole = user?.role || "student";
+  const { courseDetail, loading, fetchCourseDetail, handleCreateChapter, handleUploadMaterial, handleDeleteMaterial } = useCourses();
+  
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [materialName, setMaterialFormData] = useState("");
-  const [selectedChapter, setSelectedChapter] = useState<number>(courseData.chapters[0].id);
+  const [selectedChapter, setSelectedChapter] = useState<number>(0);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
+  const [showAddChapterModal, setShowAddChapterModal] = useState(false);
+  const [newChapterName, setNewChapterName] = useState("");
+
+  useEffect(() => {
+    if (courseId) {
+      fetchCourseDetail(courseId);
+    }
+  }, [courseId, fetchCourseDetail]);
+
+  useEffect(() => {
+    if (courseDetail?.chapters && courseDetail.chapters.length > 0 && selectedChapter === 0) {
+      setSelectedChapter(courseDetail.chapters[0].id);
+    }
+  }, [courseDetail, selectedChapter]);
 
   const handleUpload = () => {
     setMaterialFormData("");
@@ -64,20 +57,26 @@ export function CourseDetail() {
     setShowDeleteModal(true);
   };
 
-  const handleConfirmDelete = () => {
-    // TODO: Gọi API xóa tài liệu
-    toast.success("Xóa thành công", {
-      description: `Tài liệu "${selectedMaterial?.name}" đã được xóa khỏi hệ thống`,
-    });
+  const handleConfirmDelete = async () => {
+    if (!selectedMaterial) return;
+    await handleDeleteMaterial(courseId, selectedMaterial.id);
     setShowDeleteModal(false);
   };
 
-  const handleSaveUpload = () => {
-    // TODO: Gọi API upload tài liệu
+  const handleSaveUpload = async () => {
+    if (!uploadFile || !materialName || !selectedChapter) {
+      toast.error("Vui lòng điền đầy đủ thông tin");
+      return;
+    }
+    await handleUploadMaterial(courseId, selectedChapter, uploadFile, materialName);
     setShowUploadModal(false);
-    toast.success("Tải lên thành công", {
-      description: `Tài liệu "${materialName}" đã được lưu vào hệ thống`,
-    });
+  };
+
+  const handleAddChapter = async () => {
+    if (!newChapterName) return;
+    await handleCreateChapter(courseId, newChapterName);
+    setNewChapterName("");
+    setShowAddChapterModal(false);
   };
 
   const getFileIcon = (type: string) => {
@@ -94,173 +93,241 @@ export function CourseDetail() {
     }
   };
 
+  if (loading && !courseDetail) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+        <p className="text-muted-foreground">Đang tải nội dung khóa học...</p>
+      </div>
+    );
+  }
+
+  if (!courseDetail) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-muted-foreground">Không tìm thấy khóa học</p>
+        <Link to="/classes" className="text-primary hover:underline mt-4 inline-block">
+          Quay lại danh sách lớp học
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in">
       {/* Header & Breadcrumb */}
       <div className="mb-8">
-        <Link 
-          to="/classes" 
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-4 transition-colors"
-        >
-          <ChevronLeft className="w-4 h-4 mr-1" />
-          Quay lại danh sách lớp học
-        </Link>
-        
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-card border border-border rounded-2xl p-8 shadow-sm">
-          <div>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-3 bg-primary/10 rounded-xl">
-                <BookOpen className="w-8 h-8 text-primary" />
-              </div>
-              <h1 className="text-3xl font-bold text-foreground">{courseData.name}</h1>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+          <Link to="/classes" className="hover:text-primary transition-colors">Lớp học</Link>
+          <ChevronLeft className="w-4 h-4 rotate-180" />
+          <span className="text-foreground font-medium">{courseDetail.name}</span>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shadow-sm">
+              <BookOpen className="w-8 h-8" />
             </div>
-            <p className="text-muted-foreground flex items-center gap-2">
-              Giảng viên: <span className="font-semibold text-foreground">{courseData.instructor}</span>
-            </p>
+            <div>
+              <h1 className="text-3xl font-bold mb-1">{courseDetail.name}</h1>
+              <p className="text-muted-foreground">Giảng viên: <span className="font-medium text-foreground">{courseDetail.instructor}</span></p>
+            </div>
           </div>
-          
+
           {canManageContent(userRole) && (
-            <button
-              onClick={handleUpload}
-              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-md shadow-primary/20"
-            >
-              <Upload className="w-5 h-5" />
-              <span className="font-semibold">Thêm tài liệu</span>
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAddChapterModal(true)}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-xl hover:bg-secondary/80 transition-all font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                Thêm chương
+              </button>
+              <button
+                onClick={handleUpload}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:opacity-90 transition-all shadow-sm shadow-primary/20 font-medium"
+              >
+                <Upload className="w-4 h-4" />
+                Tải lên tài liệu
+              </button>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Course Content */}
-      <div className="space-y-8">
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <h2 className="text-xl font-bold flex items-center gap-2">
-            <FileText className="w-6 h-6 text-primary" />
-            Nội dung bài giảng & Tài liệu
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Tổng số: {courseData.chapters.reduce((acc, c) => acc + c.materials.length, 0)} tài liệu
-          </p>
-        </div>
+      {/* Chapters & Materials */}
+      <div className="space-y-6">
+        {courseDetail.chapters.length === 0 ? (
+          <div className="text-center py-20 bg-card border border-dashed border-border rounded-2xl">
+            <FolderOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">Khóa học này chưa có nội dung</p>
+          </div>
+        ) : (
+          courseDetail.chapters.map((chapter) => (
+            <div key={chapter.id} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+              <div className="px-6 py-4 bg-slate-50 border-b border-border flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <FolderOpen className="w-5 h-5 text-primary" />
+                  <h3 className="font-bold text-lg">{chapter.name}</h3>
+                </div>
+                <span className="text-xs font-medium bg-white px-2.5 py-1 rounded-full border border-border text-muted-foreground">
+                  {chapter.materials.length} tài liệu
+                </span>
+              </div>
 
-        <div className="grid grid-cols-1 gap-8">
-          {courseData.chapters.map((chapter) => (
-            <div key={chapter.id} className="space-y-4">
-              <h3 className="text-lg font-semibold text-slate-700 flex items-center gap-2 px-2">
-                <div className="w-1.5 h-6 bg-primary rounded-full"></div>
-                {chapter.name}
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {chapter.materials.map((material) => {
-                  const Icon = getFileIcon(material.type);
-                  return (
-                    <div
-                      key={material.id}
-                      className="group bg-card border border-border rounded-xl p-5 shadow-sm hover:shadow-md hover:border-primary/30 transition-all cursor-default"
-                    >
-                      <div className="flex items-start gap-4 mb-4">
-                        <div className="p-3 bg-slate-50 rounded-lg group-hover:bg-primary/5 transition-colors">
-                          <Icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-sm line-clamp-2 mb-1 group-hover:text-primary transition-colors">
-                            {material.name}
-                          </h4>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span>{material.size}</span>
-                            <span>•</span>
-                            <span>{material.date}</span>
+              <div className="divide-y divide-border">
+                {chapter.materials.length === 0 ? (
+                  <div className="p-8 text-center text-sm text-muted-foreground">
+                    Chưa có tài liệu trong chương này
+                  </div>
+                ) : (
+                  chapter.materials.map((material) => {
+                    const Icon = getFileIcon(material.type);
+                    return (
+                      <div key={material.id} className="px-6 py-4 flex items-center justify-between group hover:bg-slate-50/50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-lg bg-background border border-border flex items-center justify-center group-hover:border-primary/30 group-hover:bg-primary/5 transition-all">
+                            <Icon className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          </div>
+                          <div>
+                            <p className="font-medium group-hover:text-primary transition-colors">{material.name}</p>
+                            <div className="flex items-center gap-3 mt-0.5">
+                              <span className="text-xs text-muted-foreground">{material.size}</span>
+                              <span className="w-1 h-1 rounded-full bg-border" />
+                              <span className="text-xs text-muted-foreground">{material.date}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <button 
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-100 hover:bg-primary hover:text-white text-slate-700 rounded-lg text-sm font-medium transition-all"
-                          onClick={() => toast.success(`Đang tải xuống: ${material.name}`)}
-                        >
-                          <Download className="w-4 h-4" />
-                          Tải xuống
-                        </button>
-                        
-                        {canManageContent(userRole) && (
+
+                        <div className="flex items-center gap-2">
                           <button 
-                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Xóa tài liệu"
-                            onClick={() => handleDeleteClick(material)}
+                            className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                            title="Tải về"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Download className="w-4 h-4" />
                           </button>
-                        )}
+                          {canManageContent(userRole) && (
+                            <button
+                              onClick={() => handleDeleteClick(material)}
+                              className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                              title="Xóa"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
-          ))}
-        </div>
+          ))
+        )}
       </div>
 
       {/* Upload Modal */}
       <Modal
         isOpen={showUploadModal}
-        onClose={() => setShowUploadModal(false)}
-        title="Thêm tài liệu bài giảng"
+        onClose={() => !loading && setShowUploadModal(false)}
+        title="Tải lên tài liệu"
+        maxWidth="md"
+        footer={
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowUploadModal(false)}
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-secondary transition-colors"
+            >
+              Hủy
+            </button>
+            <button
+              onClick={handleSaveUpload}
+              disabled={loading || !uploadFile || !materialName}
+              className="flex items-center gap-2 px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              <span>Tải lên</span>
+            </button>
+          </div>
+        }
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-2">Tên tài liệu *</label>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Tên tài liệu *</label>
             <input
               type="text"
               value={materialName}
               onChange={(e) => setMaterialFormData(e.target.value)}
-              className="w-full px-4 py-2 border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-ring bg-background"
-              placeholder="VD: Slide bài giảng chương 4"
+              placeholder="VD: Slide bài giảng chương 1"
+              className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             />
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-2">Chương mục *</label>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Chọn chương *</label>
             <select
               value={selectedChapter}
               onChange={(e) => setSelectedChapter(Number(e.target.value))}
-              className="w-full px-4 py-2 border border-input rounded-xl focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+              className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             >
-              {courseData.chapters.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+              {courseDetail.chapters.map((chapter) => (
+                <option key={chapter.id} value={chapter.id}>
+                  {chapter.name}
+                </option>
               ))}
-              <option value="new">+ Thêm chương mới</option>
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2">File bài giảng *</label>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Tệp tài liệu *</label>
             <FileDropzone
-              onFileSelect={(file) => setUploadFile(file)}
-              onFileRemove={() => setUploadFile(null)}
+              onFileSelect={(file) => {
+                setUploadFile(file);
+                if (!materialName) setMaterialFormData(file.name.split(".")[0]);
+              }}
               selectedFile={uploadFile}
-              accept=".pdf,.doc,.docx,.ppt,.pptx,.zip"
-              maxSize={100}
+              onFileRemove={() => setUploadFile(null)}
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.rar"
+              maxSize={50} // 50MB
             />
           </div>
+        </div>
+      </Modal>
 
-          <div className="flex gap-3 pt-4">
+      {/* Add Chapter Modal */}
+      <Modal
+        isOpen={showAddChapterModal}
+        onClose={() => setShowAddChapterModal(false)}
+        title="Thêm chương mới"
+        maxWidth="sm"
+        footer={
+          <div className="flex gap-3 justify-end">
             <button
-              onClick={handleSaveUpload}
-              disabled={!materialName || !uploadFile}
-              className="flex-1 px-4 py-3 bg-primary text-primary-foreground rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              Tải lên ngay
-            </button>
-            <button
-              onClick={() => setShowUploadModal(false)}
-              className="px-4 py-3 border border-input rounded-xl hover:bg-slate-50 transition-colors font-medium"
+              onClick={() => setShowAddChapterModal(false)}
+              className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-secondary transition-colors"
             >
               Hủy
             </button>
+            <button
+              onClick={handleAddChapter}
+              disabled={!newChapterName}
+              className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Thêm
+            </button>
           </div>
+        }
+      >
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Tên chương *</label>
+          <input
+            type="text"
+            value={newChapterName}
+            onChange={(e) => setNewChapterName(e.target.value)}
+            placeholder="VD: Chương 4: React Hooks"
+            className="w-full px-4 py-2 bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+          />
         </div>
       </Modal>
 
@@ -268,28 +335,29 @@ export function CourseDetail() {
       <Modal
         isOpen={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
-        title="Xác nhận xóa tài liệu"
-      >
-        <div className="space-y-4">
-          <p className="text-muted-foreground">
-            Bạn có chắc chắn muốn xóa tài liệu <strong>{selectedMaterial?.name}</strong>? 
-            Hành động này không thể hoàn tác.
-          </p>
-          <div className="flex gap-3 pt-4">
-            <button
-              onClick={handleConfirmDelete}
-              className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
-            >
-              Xóa ngay
-            </button>
+        title="Xác nhận xóa"
+        maxWidth="sm"
+        footer={
+          <div className="flex gap-3 justify-end">
             <button
               onClick={() => setShowDeleteModal(false)}
-              className="px-4 py-2 border border-input rounded-lg hover:bg-slate-50 transition-colors"
+              className="px-4 py-2 text-sm font-medium border border-border rounded-lg hover:bg-secondary transition-colors"
             >
               Hủy
             </button>
+            <button
+              onClick={handleConfirmDelete}
+              className="px-6 py-2 bg-destructive text-destructive-foreground rounded-lg hover:opacity-90 transition-opacity"
+            >
+              Xóa tài liệu
+            </button>
           </div>
-        </div>
+        }
+      >
+        <p className="text-muted-foreground">
+          Bạn có chắc chắn muốn xóa tài liệu <span className="font-bold text-foreground">"{selectedMaterial?.name}"</span>? 
+          Hành động này không thể hoàn tác.
+        </p>
       </Modal>
     </div>
   );

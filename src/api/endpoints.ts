@@ -57,6 +57,7 @@ export const ENDPOINTS = {
     LIST: "/grades",
     MY_GRADES: "/grades/me",
     COURSE_GRADES: (courseId: number) => `/grades/course/${courseId}`,
+    CLASS_GRADES: (classId: number) => `/grades/class/${classId}`,
     EXPORT: "/grades/export",
   },
   DISCUSSIONS: {

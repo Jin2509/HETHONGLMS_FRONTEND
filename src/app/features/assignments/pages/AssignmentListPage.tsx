@@ -8,53 +8,21 @@ import { canManageContent, canSubmitWork, canViewAllSubmissions } from "../../..
 import { AssignmentTable } from "../components/AssignmentTable";
 import { AssignmentFormModal } from "../components/AssignmentFormModal";
 import type { Assignment, AssignmentFormData } from "../types/assignment.types";
-
-const assignments: Assignment[] = [
-  {
-    id: 1,
-    name: "React Component Design",
-    course: "Web Development",
-    dueDate: "2026-06-05",
-    status: "Chưa nộp",
-    hoursLeft: 72,
-  },
-  {
-    id: 2,
-    name: "Database Schema Design",
-    course: "Database Systems",
-    dueDate: "2026-06-03",
-    status: "Đã nộp",
-    hoursLeft: 24,
-  },
-  {
-    id: 3,
-    name: "Algorithm Analysis",
-    course: "Data Structures",
-    dueDate: "2026-06-02",
-    status: "Đã chấm",
-    hoursLeft: 6,
-  },
-  {
-    id: 4,
-    name: "CSS Flexbox Practice",
-    course: "Web Development",
-    dueDate: "2026-06-08",
-    status: "Chưa nộp",
-    hoursLeft: 144,
-  },
-  {
-    id: 5,
-    name: "SQL Query Optimization",
-    course: "Database Systems",
-    dueDate: "2026-05-28",
-    status: "Đã chấm",
-    hoursLeft: -120,
-  },
-];
+import { useAssignment } from "../hooks/useAssignment";
+import { useEffect } from "react";
 
 export function AssignmentListPage() {
   const { user } = useAuth();
   const userRole = user?.role || "student";
+  const {
+    assignments,
+    loading,
+    fetchAssignments,
+    createAssignment,
+    updateAssignment,
+    deleteAssignment,
+  } = useAssignment();
+
   const [activeTab, setActiveTab] = useState<"all" | "pending" | "submitted" | "graded">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -71,6 +39,10 @@ export function AssignmentListPage() {
     attachments: [],
   });
 
+  useEffect(() => {
+    fetchAssignments();
+  }, [fetchAssignments]);
+
   const filteredAssignments = assignments.filter((assignment) => {
     // Search filter
     const matchesSearch = assignment.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -79,9 +51,9 @@ export function AssignmentListPage() {
 
     // Status filter
     if (activeTab === "all") return true;
-    if (activeTab === "pending") return assignment.status === "Chưa nộp";
-    if (activeTab === "submitted") return assignment.status === "Đã nộp" || assignment.status === "Đang chấm";
-    if (activeTab === "graded") return assignment.status === "Đã chấm";
+    if (activeTab === "pending") return assignment.status === "Chưa nộp" || assignment.status === "pending";
+    if (activeTab === "submitted") return assignment.status === "Đã nộp" || assignment.status === "Đang chấm" || assignment.status === "submitted";
+    if (activeTab === "graded") return assignment.status === "Đã chấm" || assignment.status === "graded";
     return true;
   });
 
@@ -117,32 +89,46 @@ export function AssignmentListPage() {
     setShowDeleteModal(true);
   };
 
-  const handleSaveCreate = () => {
-    // TODO: Gọi API tạo bài tập
-    console.log("Creating assignment:", formData);
-    setShowCreateModal(false);
-    toast.success("Tạo bài tập thành công", {
-      description: `Bài tập "${formData.name}" đã được thêm vào khóa học`,
-    });
+  const handleSaveCreate = async () => {
+    try {
+      await createAssignment({ ...formData, courseId: 1 }); // MOCK courseId
+      setShowCreateModal(false);
+      toast.success("Tạo bài tập thành công", {
+        description: `Bài tập "${formData.name}" đã được thêm vào khóa học`,
+      });
+      fetchAssignments();
+    } catch (error) {
+      toast.error("Không thể tạo bài tập");
+    }
   };
 
-  const handleSaveEdit = () => {
-    // TODO: Gọi API cập nhật bài tập
-    console.log("Updating assignment:", formData);
-    setShowEditModal(false);
-    toast.success("Cập nhật thành công", {
-      description: "Thông tin bài tập đã được lưu",
-    });
+  const handleSaveEdit = async () => {
+    if (!selectedAssignment) return;
+    try {
+      await updateAssignment(selectedAssignment.id, formData);
+      setShowEditModal(false);
+      toast.success("Cập nhật thành công", {
+        description: "Thông tin bài tập đã được lưu",
+      });
+      fetchAssignments();
+    } catch (error) {
+      toast.error("Không thể cập nhật bài tập");
+    }
   };
 
-  const handleConfirmDelete = () => {
-    // TODO: Gọi API xóa bài tập
-    const assignmentName = selectedAssignment?.name;
-    console.log("Deleting assignment:", selectedAssignment?.id);
-    setShowDeleteModal(false);
-    toast.success("Xóa thành công", {
-      description: `Bài tập "${assignmentName}" đã được xóa`,
-    });
+  const handleConfirmDelete = async () => {
+    if (!selectedAssignment) return;
+    const assignmentName = selectedAssignment.name;
+    try {
+      await deleteAssignment(selectedAssignment.id);
+      setShowDeleteModal(false);
+      toast.success("Xóa thành công", {
+        description: `Bài tập "${assignmentName}" đã được xóa`,
+      });
+      fetchAssignments();
+    } catch (error) {
+      toast.error("Không thể xóa bài tập");
+    }
   };
 
   return (
@@ -183,9 +169,9 @@ export function AssignmentListPage() {
           <div className="flex gap-6">
             {[
               { key: "all", label: "Tất cả", count: assignments.length },
-              { key: "pending", label: "Chưa nộp", count: assignments.filter((a) => a.status === "Chưa nộp").length },
-              { key: "submitted", label: "Đã nộp", count: assignments.filter((a) => a.status === "Đã nộp" || a.status === "Đang chấm").length },
-              { key: "graded", label: "Đã chấm", count: assignments.filter((a) => a.status === "Đã chấm").length },
+              { key: "pending", label: "Chưa nộp", count: assignments.filter((a) => a.status === "Chưa nộp" || a.status === "pending").length },
+              { key: "submitted", label: "Đã nộp", count: assignments.filter((a) => a.status === "Đã nộp" || a.status === "Đang chấm" || a.status === "submitted").length },
+              { key: "graded", label: "Đã chấm", count: assignments.filter((a) => a.status === "Đã chấm" || a.status === "graded").length },
             ].map((tab) => (
               <button
                 key={tab.key}

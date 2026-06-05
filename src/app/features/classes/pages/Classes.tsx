@@ -1,60 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
-import { Users, BookOpen, User, Plus, FileUp, X } from "lucide-react";
+import { Users, BookOpen, User, Plus, FileUp, X, Loader2 } from "lucide-react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { canManageContent } from "../../../utils/permissions";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
-
-const initialClasses = [
-  {
-    id: 1,
-    name: "Web Development - Class A",
-    course: "Web Development",
-    instructor: "Dr. Nguyễn Văn B",
-    students: 45,
-    courses: 3,
-    semester: "HK2 2025",
-  },
-  {
-    id: 2,
-    name: "Data Structures - Class B",
-    course: "Data Structures",
-    instructor: "Prof. Trần Thị C",
-    students: 38,
-    courses: 2,
-    semester: "HK2 2025",
-  },
-  {
-    id: 3,
-    name: "Database Systems - Class A",
-    course: "Database Systems",
-    instructor: "Dr. Phạm Thị E",
-    students: 42,
-    courses: 4,
-    semester: "HK2 2025",
-  },
-];
+import { useClasses } from "../hooks/useClasses";
 
 export function Classes() {
   const { user } = useAuth();
   const userRole = user?.role || "student";
-  const [classesList, setClassesList] = useState(initialClasses);
+  const { classes, loading, fetchClasses, handleCreateClass } = useClasses();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState("");
   const [formData, setFormData] = useState({
     name: "",
-    course: "",
-    instructor: user?.name || "",
+    courseId: 1, // Mặc định cho demo
+    instructorId: user?.id || 0,
     semester: "HK2 2025",
     studentIds: [] as string[],
   });
 
+  useEffect(() => {
+    fetchClasses();
+  }, [fetchClasses]);
+
   const handleCreate = () => {
     setFormData({
       name: "",
-      course: "",
-      instructor: user?.name || "",
+      courseId: 1,
+      instructorId: user?.id || 0,
       semester: "HK2 2025",
       studentIds: [],
     });
@@ -86,7 +61,6 @@ export function Classes() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // MOCK: Giả lập đọc file Excel và lấy danh sách MSSV
       toast.info(`Đang xử lý file: ${file.name}`);
       setTimeout(() => {
         const mockIds = ["20210001", "20210002", "20210003", "20210004", "20210005"];
@@ -99,22 +73,24 @@ export function Classes() {
     }
   };
 
-  const handleSaveCreate = () => {
-    // MOCK: Logic tạo lớp học mới
-    const newClass = {
-      id: classesList.length + 1,
-      name: formData.name,
-      course: formData.course,
-      instructor: formData.instructor,
-      semester: formData.semester,
-      students: formData.studentIds.length,
-      courses: 0,
-    };
-    setClassesList([...classesList, newClass]);
-    setShowCreateModal(false);
-    toast.success("Tạo lớp học thành công", {
-      description: `Lớp học "${formData.name}" đã được tạo với ${formData.studentIds.length} sinh viên`,
-    });
+  const handleSaveCreate = async () => {
+    if (!formData.name) {
+      toast.error("Vui lòng nhập tên lớp học");
+      return;
+    }
+    try {
+      await handleCreateClass({
+        name: formData.name,
+        courseId: formData.courseId,
+        instructorId: formData.instructorId,
+        semester: formData.semester,
+        studentIds: formData.studentIds,
+      });
+      setShowCreateModal(false);
+      fetchClasses();
+    } catch (error) {
+      // Error handled in hook
+    }
   };
 
   return (
@@ -137,45 +113,52 @@ export function Classes() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {classesList.map((cls) => (
-          <Link
-            key={cls.id}
-            to={`/classes/${cls.id}`}
-            className="bg-card border border-border rounded-xl p-6 shadow-sm card-hover block"
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div className="p-3 bg-primary/10 rounded-lg">
-                <BookOpen className="w-6 h-6 text-primary" />
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+          <p className="text-muted-foreground">Đang tải danh sách lớp học...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {classes.map((cls) => (
+            <Link
+              key={cls.id}
+              to={`/classes/${cls.id}`}
+              className="bg-card border border-border rounded-xl p-6 shadow-sm card-hover block"
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="p-3 bg-primary/10 rounded-lg">
+                  <BookOpen className="w-6 h-6 text-primary" />
+                </div>
+                <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">
+                  {cls.semester}
+                </span>
               </div>
-              <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-medium">
-                {cls.semester}
-              </span>
-            </div>
 
-            <h3 className="font-semibold text-lg mb-2">{cls.name}</h3>
+              <h3 className="font-semibold text-lg mb-2">{cls.name}</h3>
 
-            <div className="space-y-2 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                <span>{cls.instructor}</span>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  <span>{cls.instructorName}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  <span>{cls.studentCount || 0} sinh viên</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4" />
+                  <span>{cls.courseCount || 0} khóa học</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                <span>{cls.students} sinh viên</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <BookOpen className="w-4 h-4" />
-                <span>{cls.courses} khóa học</span>
-              </div>
-            </div>
 
-            <div className="mt-4 w-full py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity text-sm font-medium text-center">
-              Xem chi tiết
-            </div>
-          </Link>
-        ))}
-      </div>
+              <div className="mt-4 w-full py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity text-sm font-medium text-center">
+                Xem chi tiết
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Create Modal */}
       <Modal
@@ -192,26 +175,6 @@ export function Classes() {
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="VD: Web Development - Class A"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Môn học *</label>
-            <input
-              type="text"
-              value={formData.course}
-              onChange={(e) => setFormData({ ...formData, course: e.target.value })}
-              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="VD: Web Development"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-2">Giảng viên *</label>
-            <input
-              type="text"
-              value={formData.instructor}
-              onChange={(e) => setFormData({ ...formData, instructor: e.target.value })}
-              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Tên giảng viên"
             />
           </div>
           <div>
@@ -290,9 +253,10 @@ export function Classes() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveCreate}
-              disabled={!formData.name || !formData.course}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!formData.name || loading}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Tạo lớp học
             </button>
             <button
@@ -307,3 +271,4 @@ export function Classes() {
     </div>
   );
 }
+

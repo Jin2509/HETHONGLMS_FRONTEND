@@ -30,16 +30,28 @@ export function AssignmentTable({
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case "pending":
       case "Chưa nộp":
         return "bg-slate-100 text-slate-700";
+      case "submitted":
       case "Đã nộp":
         return "bg-primary/10 text-primary";
       case "Đang chấm":
         return "bg-warning/10 text-warning";
+      case "graded":
       case "Đã chấm":
         return "bg-success/10 text-success";
       default:
         return "bg-slate-100 text-slate-700";
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "pending": return "Chưa nộp";
+      case "submitted": return "Đã nộp";
+      case "graded": return "Đã chấm";
+      default: return status;
     }
   };
 
@@ -98,9 +110,11 @@ export function AssignmentTable({
                 </td>
                 <td className="px-6 py-4">
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(assignment.status)}`}
+                    className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadge(
+                      assignment.status
+                    )}`}
                   >
-                    {assignment.status}
+                    {getStatusLabel(assignment.status)}
                   </span>
                 </td>
                 <td className="px-6 py-4">

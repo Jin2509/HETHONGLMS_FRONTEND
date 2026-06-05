@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { toast } from "sonner";
 
 export interface User {
+  id: number;
   email: string;
   name: string;
   role: "student" | "teacher" | "admin";

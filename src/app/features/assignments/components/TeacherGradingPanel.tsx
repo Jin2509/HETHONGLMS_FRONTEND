@@ -5,19 +5,12 @@ import { useAssignment } from "../hooks/useAssignment";
 import type { AssignmentStats, Submission } from "../types/assignment.types";
 
 interface TeacherGradingPanelProps {
+  assignmentId: number;
   stats: AssignmentStats;
   submissions: Submission[];
 }
 
-const mockSubmissions: Submission[] = [
-  { id: 1, studentName: "Nguyễn Văn A", studentId: "SV001", submittedAt: "01/06/2026 14:30", file: "submission-1.zip", grade: null, feedback: "", status: "Đã nộp" },
-  { id: 2, studentName: "Trần Thị B", studentId: "SV002", submittedAt: "01/06/2026 16:45", file: "submission-2.zip", grade: 9.5, feedback: "Excellent work! Code structure is clean and well-documented.", status: "Đã chấm" },
-  { id: 3, studentName: "Lê Văn C", studentId: "SV003", submittedAt: "02/06/2026 09:20", file: "submission-3.zip", grade: null, feedback: "", status: "Đã nộp" },
-  { id: 4, studentName: "Phạm Thị D", studentId: "SV004", submittedAt: "02/06/2026 11:15", file: "submission-4.zip", grade: 8.0, feedback: "Good implementation but needs improvement in error handling.", status: "Đã chấm" },
-  { id: 5, studentName: "Hoàng Văn E", studentId: "SV005", submittedAt: "02/06/2026 15:50", file: "submission-5.zip", grade: null, feedback: "", status: "Đã nộp" },
-];
-
-export function TeacherGradingPanel({ stats, submissions = mockSubmissions }: TeacherGradingPanelProps) {
+export function TeacherGradingPanel({ assignmentId, stats, submissions }: TeacherGradingPanelProps) {
   const {
     grades,
     feedbacks,
@@ -25,14 +18,19 @@ export function TeacherGradingPanel({ stats, submissions = mockSubmissions }: Te
     updateGrade,
     updateFeedback,
     toggleExpandedRow,
+    saveGrades,
+    loading
   } = useAssignment(submissions);
 
-  const handleSaveGrades = () => {
-    // TODO: Gọi API lưu điểm
-    console.log("Saving grades:", { grades, feedbacks });
-    toast.success("Lưu điểm thành công", {
-      description: "Điểm đã được cập nhật cho sinh viên",
-    });
+  const handleSaveGrades = async () => {
+    try {
+      await saveGrades(assignmentId);
+      toast.success("Lưu điểm thành công", {
+        description: "Điểm đã được cập nhật cho sinh viên",
+      });
+    } catch (error) {
+      toast.error("Không thể lưu điểm");
+    }
   };
 
   const getStatusBadge = (status: string) => {

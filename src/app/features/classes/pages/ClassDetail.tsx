@@ -26,8 +26,11 @@ import type { Column } from "../../../components/shared";
 import { toast } from "sonner";
 import { useAuth } from "../../../contexts/AuthContext";
 import { canViewAllSubmissions, canManageContent } from "../../../utils/permissions";
+import { TeacherGradeManagement } from "../components/TeacherGradeManagement";
 
-interface Student {
+import { mockStudents } from "../../../../mock/data";
+
+export interface Student {
   id: number;
   studentId: string;
   name: string;
@@ -51,83 +54,10 @@ const classData = {
   endDate: "2026-06-15",
 };
 
-const initialStudents: Student[] = [
-  {
-    id: 1,
-    studentId: "20210001",
-    name: "Nguyễn Văn A",
-    email: "nguyenvana@student.edu",
-    department: "Công nghệ thông tin",
-  },
-  {
-    id: 2,
-    studentId: "20210002",
-    name: "Trần Thị B",
-    email: "tranthib@student.edu",
-    department: "Công nghệ thông tin",
-  },
-  {
-    id: 3,
-    studentId: "20210003",
-    name: "Lê Văn C",
-    email: "levanc@student.edu",
-    department: "Công nghệ thông tin",
-  },
-  {
-    id: 4,
-    studentId: "20210004",
-    name: "Phạm Thị D",
-    email: "phamthid@student.edu",
-    department: "Công nghệ thông tin",
-  },
-];
+const initialStudents: Student[] = mockStudents.slice(0, 4);
 
 // Mock global students database for searching
-const mockGlobalStudents: Student[] = [
-  ...initialStudents,
-  {
-    id: 5,
-    studentId: "20210005",
-    name: "Hoàng Văn E",
-    email: "hoangvane@student.edu",
-    department: "Công nghệ thông tin",
-  },
-  {
-    id: 6,
-    studentId: "20210006",
-    name: "Vũ Thị F",
-    email: "vuthif@student.edu",
-    department: "Kinh tế",
-  },
-  {
-    id: 7,
-    studentId: "20210007",
-    name: "Đặng Văn G",
-    email: "dangvang@student.edu",
-    department: "Ngôn ngữ Anh",
-  },
-  {
-    id: 8,
-    studentId: "20210008",
-    name: "Lý Văn H",
-    email: "lyvanh@student.edu",
-    department: "Luật",
-  },
-  {
-    id: 9,
-    studentId: "20210009",
-    name: "Trương Thị I",
-    email: "truongthii@student.edu",
-    department: "Y đa khoa",
-  },
-  {
-    id: 10,
-    studentId: "20210010",
-    name: "Đỗ Văn K",
-    email: "dovank@student.edu",
-    department: "Kiến trúc",
-  },
-];
+const mockGlobalStudents: Student[] = mockStudents;
 
 const materials = [
   { id: 1, name: "Slide bài giảng tuần 1-4", type: "PDF", size: "2.4 MB", date: "2026-02-05" },
@@ -174,7 +104,7 @@ export function ClassDetail() {
   const userRole = user?.role || "student";
   const canViewStudents = canViewAllSubmissions(userRole);
   
-  const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses" | "materials" | "announcements">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses" | "materials" | "announcements" | "grades">("overview");
   const [searchQuery, setSearchQuery] = useState("");
   const [classStudents, setClassStudents] = useState<Student[]>(initialStudents);
   const [showCreateCourseModal, setShowCreateCourseModal] = useState(false);
@@ -429,6 +359,7 @@ export function ClassDetail() {
             { key: "students", label: "Sinh viên", icon: Users, teacherOnly: true },
             { key: "courses", label: "Khóa học", icon: Play },
             { key: "materials", label: "Tài liệu", icon: FileText },
+            { key: "grades", label: "Điểm số", icon: Award, teacherOnly: true },
             { key: "announcements", label: "Thông báo", icon: MessageSquare },
           ]
             .filter((tab) => !tab.teacherOnly || canViewStudents)
@@ -712,6 +643,10 @@ export function ClassDetail() {
             </div>
           ))}
         </div>
+      )}
+
+      {activeTab === "grades" && canViewStudents && (
+        <TeacherGradeManagement classId={Number(id)} />
       )}
 
       {activeTab === "announcements" && (

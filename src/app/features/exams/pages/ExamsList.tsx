@@ -1,50 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
-import { Calendar, Clock, FileCheck, Eye, Play, Plus, Pencil, Trash2, Upload, FileText, X, ClipboardCheck, Search } from "lucide-react";
+import { Calendar, Clock, FileCheck, Eye, Play, Plus, Pencil, Trash2, Upload, FileText, X, ClipboardCheck, Search, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { getVietnamDateInputValue, getVietnamTimeInputValue } from "../../../utils/datetime";
 import { useAuth } from "../../../contexts/AuthContext";
 import { canManageContent, canViewAllSubmissions } from "../../../utils/permissions";
-
-const exams = [
-  {
-    id: 1,
-    name: "Midterm Exam - Web Development",
-    course: "Web Development",
-    date: "2026-06-10",
-    duration: 90,
-    status: "Chưa làm",
-  },
-  {
-    id: 2,
-    name: "Final Exam - Data Structures",
-    course: "Data Structures",
-    date: "2026-06-15",
-    duration: 120,
-    status: "Chưa làm",
-  },
-  {
-    id: 3,
-    name: "Quiz - CSS Fundamentals",
-    course: "Web Development",
-    date: "2026-05-28",
-    duration: 30,
-    status: "Đã làm",
-  },
-  {
-    id: 4,
-    name: "Midterm Exam - Database",
-    course: "Database Systems",
-    date: "2026-05-25",
-    duration: 90,
-    status: "Đã làm",
-  },
-];
+import { useExam } from "../hooks/useExam";
 
 export function ExamsList() {
   const { user } = useAuth();
   const userRole = user?.role || "student";
+  const { 
+    exams, 
+    loading, 
+    fetchExams, 
+    createExam, 
+    updateExam, 
+    deleteExam 
+  } = useExam();
+
   const [activeTab, setActiveTab] = useState<"all" | "pending" | "finished">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -62,18 +37,40 @@ export function ExamsList() {
     attachments: [] as File[],
   });
 
+  useEffect(() => {
+    fetchExams();
+  }, [fetchExams]);
+
   const filteredExams = exams.filter((exam) => {
     // Search filter
     const matchesSearch = exam.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         exam.course.toLowerCase().includes(searchQuery.toLowerCase());
+                         (exam.courseName || "").toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchesSearch) return false;
 
     // Status filter
     if (activeTab === "all") return true;
-    if (activeTab === "pending") return exam.status === "Chưa làm";
-    if (activeTab === "finished") return exam.status === "Đã làm";
+    if (activeTab === "pending") return exam.status === "upcoming" || exam.status === "active";
+    if (activeTab === "finished") return exam.status === "finished";
     return true;
   });
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case "upcoming": return "Sắp diễn ra";
+      case "active": return "Đang diễn ra";
+      case "finished": return "Đã kết thúc";
+      default: return status;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "upcoming": return "bg-blue-100 text-blue-700";
+      case "active": return "bg-green-100 text-green-700 animate-pulse";
+      case "finished": return "bg-slate-100 text-slate-700";
+      default: return "bg-slate-100 text-slate-700";
+    }
+  };
 
   const handleCreate = () => {
     setFormData({
@@ -238,12 +235,12 @@ export function ExamsList() {
               <div className="flex-1">
                 <h3 className="font-semibold text-lg mb-2">{exam.name}</h3>
                 <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-medium">
-                  {exam.course}
+                  {exam.courseName || "Khóa học"}
                 </span>
               </div>
-              {exam.status === "Đã làm" && (
+              {exam.status === "finished" && (
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-success">Đã hoàn thành</div>
+                  <div className="text-2xl font-bold text-success">Đã kết thúc</div>
                   <div className="text-xs text-muted-foreground">điểm</div>
                 </div>
               )}
@@ -261,13 +258,9 @@ export function ExamsList() {
               <div className="flex items-center gap-2 text-sm">
                 <FileCheck className="w-4 h-4" />
                 <span
-                  className={
-                    exam.status === "Đã làm"
-                      ? "text-success font-medium"
-                      : "text-warning font-medium"
-                  }
+                  className={`font-medium ${getStatusColor(exam.status)} px-2 py-0.5 rounded text-xs`}
                 >
-                  {exam.status}
+                  {getStatusLabel(exam.status)}
                 </span>
               </div>
             </div>
@@ -275,7 +268,7 @@ export function ExamsList() {
             <div className="flex gap-2">
               {userRole === 'student' ? (
                 // Student: Hiển thị nút làm bài hoặc xem kết quả
-                exam.status === "Chưa làm" && new Date(exam.date) <= new Date() ? (
+                exam.status === "active" ? (
                   <Link
                     to={`/exams/${exam.id}/take`}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
@@ -283,7 +276,7 @@ export function ExamsList() {
                     <Play className="w-4 h-4" />
                     <span className="font-medium">Bắt đầu làm bài</span>
                   </Link>
-                ) : exam.status === "Đã làm" ? (
+                ) : exam.status === "finished" ? (
                   <Link
                     to={`/exams/${exam.id}/result`}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-card border border-input rounded-lg hover:bg-slate-50 transition-colors"
@@ -292,7 +285,7 @@ export function ExamsList() {
                     <span className="font-medium">Xem kết quả</span>
                   </Link>
                 ) : (
-                  <div className="flex-1 text-center text-sm text-muted-foreground py-2">
+                  <div className="flex-1 text-center text-sm text-muted-foreground py-2 bg-slate-50 rounded-lg">
                     Chưa đến giờ thi
                   </div>
                 )

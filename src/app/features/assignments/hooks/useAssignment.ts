@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { 
   GradeState, 
   FeedbackState, 
@@ -16,15 +16,19 @@ export function useAssignment(initialSubmissions: Submission[] = []) {
   const [assignmentDetail, setAssignmentDetail] = useState<AssignmentDetail | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>(initialSubmissions);
 
-  const [grades, setGrades] = useState<GradeState>(
-    initialSubmissions.reduce((acc: GradeState, s: Submission) => ({ ...acc, [s.id]: s.grade }), {})
-  );
+  const [grades, setGrades] = useState<GradeState>({});
 
-  const [feedbacks, setFeedbacks] = useState<FeedbackState>(
-    initialSubmissions.reduce((acc: FeedbackState, s: Submission) => ({ ...acc, [s.id]: s.feedback }), {})
-  );
+  const [feedbacks, setFeedbacks] = useState<FeedbackState>({});
 
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (initialSubmissions.length > 0) {
+      setSubmissions(initialSubmissions);
+      setGrades(initialSubmissions.reduce((acc: GradeState, s: Submission) => ({ ...acc, [s.id]: s.grade }), {}));
+      setFeedbacks(initialSubmissions.reduce((acc: FeedbackState, s: Submission) => ({ ...acc, [s.id]: s.feedback || "" }), {}));
+    }
+  }, [initialSubmissions]);
 
   // API calls
   const fetchAssignments = useCallback(async (params?: { status?: string; courseId?: number }) => {
@@ -32,9 +36,10 @@ export function useAssignment(initialSubmissions: Submission[] = []) {
     setError(null);
     try {
       const data = await assignmentService.getAssignments(params);
-      setAssignments(data);
-    } catch {
-      setError("Không thể tải danh sách bài tập");
+      setAssignments(data as unknown as Assignment[]);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Không thể tải danh sách bài tập");
+      setAssignments([]);
     } finally {
       setLoading(false);
     }
@@ -45,9 +50,10 @@ export function useAssignment(initialSubmissions: Submission[] = []) {
     setError(null);
     try {
       const data = await assignmentService.getAssignmentDetail(id);
-      setAssignmentDetail(data);
-    } catch {
-      setError("Không thể tải thông tin bài tập");
+      setAssignmentDetail(data as unknown as AssignmentDetail);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Không thể tải thông tin bài tập");
+      setAssignmentDetail(null);
     } finally {
       setLoading(false);
     }
@@ -58,10 +64,10 @@ export function useAssignment(initialSubmissions: Submission[] = []) {
     setError(null);
     try {
       const data = await assignmentService.getSubmissions(assignmentId);
-      setSubmissions(data);
-      // Update grades and feedbacks from fetched data
-      setGrades(data.reduce((acc: GradeState, s: Submission) => ({ ...acc, [s.id]: s.grade }), {}));
-      setFeedbacks(data.reduce((acc: FeedbackState, s: Submission) => ({ ...acc, [s.id]: s.feedback || "" }), {}));
+      const typedData = data as unknown as Submission[];
+      setSubmissions(typedData);
+      setGrades(typedData.reduce((acc: GradeState, s: Submission) => ({ ...acc, [s.id]: s.grade }), {}));
+      setFeedbacks(typedData.reduce((acc: FeedbackState, s: Submission) => ({ ...acc, [s.id]: s.feedback || "" }), {}));
     } catch {
       setError("Không thể tải danh sách bài nộp");
     } finally {
