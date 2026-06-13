@@ -1,5 +1,5 @@
 import apiClient from "../api/client";
-import { downloadFile } from "../api/download";
+import { buildDownloadUrls, downloadFile } from "../api/download";
 import { ENDPOINTS } from "../api/endpoints";
 import type { 
   Assignment, 
@@ -27,6 +27,7 @@ type RawSubmission = Partial<Submission> & {
   originalFileName?: string;
   attachmentName?: string;
   score?: number | null;
+  url?: string;
 };
 
 function toApiDueDate(data: Partial<AssignmentFormData>): string | undefined {
@@ -50,13 +51,15 @@ function normalizeAttachment(attachment: Partial<AssignmentAttachment> & {
   originalFileName?: string;
   fileSize?: number | string;
   fileUrl?: string;
+  path?: string;
+  downloadUrl?: string;
 }): AssignmentAttachment {
   const size = attachment.size ?? attachment.fileSize;
   return {
     id: Number(attachment.id),
     name: attachment.name || attachment.fileName || attachment.originalFileName || "Tệp đính kèm",
     size: size === undefined ? "" : String(size),
-    url: attachment.url || attachment.fileUrl || "",
+    url: attachment.downloadUrl || attachment.url || attachment.fileUrl || attachment.path || "",
   };
 }
 
@@ -84,7 +87,7 @@ function normalizeSubmission(raw: RawSubmission): Submission {
     studentId: String(raw.studentId || raw.studentCode || ""),
     submittedAt: raw.submittedAt || "",
     file: raw.file || raw.fileName || raw.originalFileName || raw.attachmentName || "",
-    fileUrl: raw.fileUrl,
+    fileUrl: raw.fileUrl || raw.url,
     grade: raw.grade ?? raw.score ?? null,
     feedback: raw.feedback || "",
     status: raw.status || (raw.grade === null || raw.grade === undefined ? "submitted" : "graded"),
@@ -216,9 +219,15 @@ export async function downloadAssignmentAttachment(
   _assignmentId: number,
   attachment: AssignmentAttachment
 ): Promise<void> {
-  await downloadFile(attachment.url || ENDPOINTS.ASSIGNMENT_ATTACHMENTS.DETAIL(attachment.id), attachment.name);
+  await downloadFile(
+    buildDownloadUrls(ENDPOINTS.ASSIGNMENT_ATTACHMENTS.DOWNLOAD(attachment.id), attachment.url),
+    attachment.name
+  );
 }
 
 export async function downloadSubmissionFile(_assignmentId: number, submission: Submission): Promise<void> {
-  await downloadFile(submission.fileUrl || ENDPOINTS.SUBMISSIONS.DETAIL(submission.id), submission.file || `submission-${submission.id}`);
+  await downloadFile(
+    buildDownloadUrls(ENDPOINTS.SUBMISSIONS.DOWNLOAD(submission.id), submission.fileUrl),
+    submission.file || `submission-${submission.id}`
+  );
 }

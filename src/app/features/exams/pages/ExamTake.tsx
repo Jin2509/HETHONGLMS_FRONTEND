@@ -116,9 +116,22 @@ export function ExamTake() {
   const isLowTime = timeLeft < 5 * 60;
 
   const question = questions[currentQuestionIdx];
-  if (!question) return null;
+  if (!question) {
+    return (
+      <div className="fixed inset-0 bg-background z-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Đề thi này chưa có câu hỏi.</p>
+          <button onClick={() => navigate("/exams")} className="text-primary hover:underline">
+            Quay lại danh sách
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const isAnswered = answers[question.id] !== undefined;
+  const hasOptions = Boolean(question.options?.length);
+  const isTextAnswer = question.type === "essay" || !hasOptions;
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
@@ -203,8 +216,15 @@ export function ExamTake() {
               </div>
 
               <div className="space-y-3">
-                {question.type === "single"
-                  ? question.options.map((option) => (
+                {isTextAnswer ? (
+                  <textarea
+                    value={answers[question.id] || ""}
+                    onChange={(e) => handleAnswer(question.id, e.target.value)}
+                    className="w-full min-h-48 px-4 py-3 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+                    placeholder="Nhập câu trả lời của bạn..."
+                  />
+                ) : question.type === "single" || question.type === "multiple_choice"
+                  ? question.options?.map((option) => (
                       <label
                         key={option.id}
                         className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
@@ -223,7 +243,7 @@ export function ExamTake() {
                         <span className="flex-1">{option.text}</span>
                       </label>
                     ))
-                  : question.options.map((option) => (
+                  : question.options?.map((option) => (
                       <label
                         key={option.id}
                         className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-colors ${

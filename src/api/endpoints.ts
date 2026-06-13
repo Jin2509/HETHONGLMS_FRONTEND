@@ -27,10 +27,14 @@ export const ENDPOINTS = {
     DETAIL: (id: number) => `/courses/${id}`,
     UPDATE: (id: number) => `/courses/${id}`,
     DELETE: (id: number) => `/courses/${id}`,
+    BY_CLASS: (classId: number) => `/courses/class/${classId}`,
     CHAPTERS: (id: number) => `/courses/${id}/chapters`,
     MATERIALS: (id: number) => `/courses/${id}/materials`,
-    UPLOAD: (id: number) => `/courses/${id}/materials/upload`,
-    DOWNLOAD_MATERIAL: (courseId: number, materialId: number) => `/courses/${courseId}/materials/${materialId}/download`,
+    UPLOAD: (courseId: number, chapterId: number) => `/courses/${courseId}/chapters/${chapterId}/materials`,
+  },
+  COURSE_MATERIALS: {
+    DETAIL: (id: number) => `/course-materials/${id}`,
+    DELETE: (id: number) => `/course-materials/${id}`,
   },
   CHAPTERS: {
     DETAIL: (id: number) => `/chapters/${id}`,
@@ -47,6 +51,7 @@ export const ENDPOINTS = {
     CREATE: "/assignment-attachments",
     DETAIL: (id: number) => `/assignment-attachments/${id}`,
     BY_ASSIGNMENT: (assignmentId: number) => `/assignment-attachments/assignment/${assignmentId}`,
+    DOWNLOAD: (id: number) => `/assignment-attachments/${id}/download`,
     DELETE: (id: number) => `/assignment-attachments/${id}`,
   },
   SUBMISSIONS: {
@@ -54,6 +59,7 @@ export const ENDPOINTS = {
     UPLOAD: "/submissions/upload",
     DETAIL: (id: number) => `/submissions/${id}`,
     BY_ASSIGNMENT: (assignmentId: number) => `/submissions/assignment/${assignmentId}`,
+    DOWNLOAD: (id: number) => `/submissions/${id}/download`,
     GRADE: (id: number) => `/submissions/${id}/grade`,
     DELETE: (id: number) => `/submissions/${id}`,
   },
@@ -71,6 +77,12 @@ export const ENDPOINTS = {
     GRADE: (id: number) => `/exams/${id}/grade`,
     DOWNLOAD_ATTACHMENT: (examId: number, attachmentId: number) => `/exams/${examId}/attachments/${attachmentId}/download`,
     DOWNLOAD_SUBMISSION: (examId: number, submissionId: number) => `/exams/${examId}/submissions/${submissionId}/download`,
+  },
+  EXAM_ATTACHMENTS: {
+    CREATE: "/exam-attachments",
+    DETAIL: (id: number) => `/exam-attachments/${id}`,
+    BY_EXAM: (examId: number) => `/exam-attachments/exam/${examId}`,
+    DELETE: (id: number) => `/exam-attachments/${id}`,
   },
   GRADES: {
     LIST: "/grades",

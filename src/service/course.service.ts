@@ -1,5 +1,5 @@
 import apiClient from "../api/client";
-import { downloadFile } from "../api/download";
+import { buildDownloadUrls, downloadFile } from "../api/download";
 import { ENDPOINTS } from "../api/endpoints";
 
 export interface CourseMaterial {
@@ -7,6 +7,9 @@ export interface CourseMaterial {
   name: string;
   type: "pdf" | "folder" | "file" | "video" | "zip" | "rar";
   url?: string;
+  fileUrl?: string;
+  path?: string;
+  downloadUrl?: string;
   size?: string;
   date?: string;
 }
@@ -98,7 +101,7 @@ export async function uploadMaterial(courseId: number, chapterId: number, file: 
   formData.append("name", name);
   formData.append("chapterId", chapterId.toString());
   const response = await apiClient.post<ApiResponse<CourseMaterial>>(
-    ENDPOINTS.COURSES.UPLOAD(courseId),
+    ENDPOINTS.COURSES.UPLOAD(courseId, chapterId),
     formData,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
@@ -106,12 +109,16 @@ export async function uploadMaterial(courseId: number, chapterId: number, file: 
 }
 
 export async function deleteMaterial(courseId: number, materialId: number): Promise<void> {
-  await apiClient.delete(`${ENDPOINTS.COURSES.DETAIL(courseId)}/materials/${materialId}`);
+  void courseId;
+  await apiClient.delete(ENDPOINTS.COURSE_MATERIALS.DELETE(materialId));
 }
 
 export async function downloadMaterial(courseId: number, material: CourseMaterial): Promise<void> {
   await downloadFile(
-    material.url || ENDPOINTS.COURSES.DOWNLOAD_MATERIAL(courseId, material.id),
+    buildDownloadUrls(
+      ENDPOINTS.COURSE_MATERIALS.DETAIL(material.id),
+      material.downloadUrl || material.url || material.fileUrl || material.path
+    ),
     material.name
   );
 }

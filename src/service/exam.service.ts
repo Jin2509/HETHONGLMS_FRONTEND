@@ -1,5 +1,5 @@
 import apiClient from "../api/client";
-import { downloadFile } from "../api/download";
+import { buildDownloadUrls, downloadFile } from "../api/download";
 import { ENDPOINTS } from "../api/endpoints";
 
 export interface ExamAttachment {
@@ -7,6 +7,9 @@ export interface ExamAttachment {
   name: string;
   size?: string;
   url?: string;
+  fileUrl?: string;
+  path?: string;
+  downloadUrl?: string;
 }
 
 export interface Exam {
@@ -25,9 +28,9 @@ export interface Exam {
 export interface ExamQuestion {
   id: number;
   text: string;
-  type: "single" | "multiple";
+  type: "single" | "multiple" | "multiple_choice" | "essay";
   points: number;
-  options: ExamOption[];
+  options?: ExamOption[];
 }
 
 export interface ExamOption {
@@ -42,10 +45,24 @@ export interface ExamSubmission {
   studentCode?: string;
   examId: number;
   fileUrl?: string;
+  url?: string;
+  answers?: ExamAnswer[];
   grade: number | null;
+  score?: number | null;
+  passed?: boolean | null;
   feedback?: string;
   status: "pending" | "submitted" | "graded";
   submittedAt: string;
+}
+
+export interface ExamAnswer {
+  id: number;
+  submissionId: number;
+  questionId: number;
+  answerText?: string;
+  fileUrl?: string;
+  score?: number | null;
+  feedback?: string;
 }
 
 export interface ExamResult {
@@ -76,49 +93,132 @@ export type ExamPayload = Partial<Exam> & {
   attachments?: File[];
 };
 
-function buildExamFormData(data: ExamPayload): FormData {
-  const formData = new FormData();
-  if (data.name) formData.append("name", data.name);
-  if (data.courseId) formData.append("courseId", String(data.courseId));
-  if (data.description) formData.append("description", data.description);
-  if (data.date) formData.append("date", data.date);
-  if (data.duration !== undefined) formData.append("duration", String(data.duration));
-  if (data.totalPoints !== undefined) formData.append("totalPoints", String(data.totalPoints));
-  if (data.status) formData.append("status", data.status);
-  data.attachments?.forEach((file) => formData.append("attachments", file));
-  return formData;
+function buildExamPayload(data: ExamPayload) {
+  return {
+    name: data.name,
+    courseId: data.courseId,
+    description: data.description,
+    date: data.date,
+    duration: data.duration,
+    totalPoints: data.totalPoints,
+  };
+}
+
+async function uploadExamAttachments(examId: number, attachments?: File[]): Promise<void> {
+  if (!attachments?.length) return;
+
+  await Promise.all(
+    attachments.map((file) => {
+      const formData = new FormData();
+      formData.append("examId", String(examId));
+      formData.append("file", file);
+      return apiClient.post(ENDPOINTS.EXAM_ATTACHMENTS.CREATE, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    })
+  );
+}
+
+function normalizeQuestion(question: Partial<ExamQuestion> & { type?: string; points?: number | string }): ExamQuestion {
+  return {
+    id: Number(question.id),
+    text: question.text || "",
+    type: (question.type || "essay") as ExamQuestion["type"],
+    points: Number(question.points ?? 0),
+    options: question.options || [],
+  };
+}
+
+function normalizeExam(raw: Partial<Exam> & { questions?: ExamQuestion[]; totalPoints?: number | string }): Exam & { questions: ExamQuestion[] } {
+  return {
+    id: Number(raw.id),
+    name: raw.name || "",
+    courseId: Number(raw.courseId || 0),
+    courseName: raw.courseName,
+    description: raw.description,
+    date: raw.date || "",
+    duration: Number(raw.duration || 0),
+    totalPoints: Number(raw.totalPoints ?? 10),
+    status: (raw.status || "upcoming") as Exam["status"],
+    attachments: raw.attachments || [],
+    questions: (raw.questions || []).map(normalizeQuestion),
+  };
+}
+
+function normalizeSubmission(raw: Partial<ExamSubmission> & { score?: number | string | null }): ExamSubmission {
+  const answers = raw.answers || [];
+  const score = raw.score ?? raw.grade ?? null;
+  const grade = score === null || score === undefined ? null : Number(score);
+  const fileUrl = raw.fileUrl || raw.url || answers.find((answer) => answer.fileUrl)?.fileUrl;
+
+  return {
+    id: Number(raw.id),
+    studentId: Number(raw.studentId || 0),
+    studentName: raw.studentName || "",
+    studentCode: raw.studentCode,
+    examId: Number(raw.examId || 0),
+    fileUrl,
+    url: raw.url,
+    answers,
+    grade,
+    score: grade,
+    passed: raw.passed ?? null,
+    feedback: raw.feedback || "",
+    status: raw.status || (grade === null ? "submitted" : "graded"),
+    submittedAt: raw.submittedAt || "",
+  };
+}
+
+function buildExamResult(submission: ExamSubmission): ExamResult {
+  const answers = submission.answers || [];
+  const scoredAnswers = answers.filter((answer) => answer.score !== null && answer.score !== undefined);
+  const correctAnswers = scoredAnswers.filter((answer) => Number(answer.score) > 0).length;
+  return {
+    score: submission.grade ?? 0,
+    totalQuestions: answers.length,
+    correctAnswers,
+    percentile: submission.passed ? 100 : 0,
+    passed: Boolean(submission.passed),
+    sections: [],
+    questions: answers.map((answer, index) => ({
+      id: answer.id,
+      text: `Câu ${index + 1}`,
+      yourAnswer: answer.answerText || answer.fileUrl || "Chưa có câu trả lời",
+      correctAnswer: "",
+      isCorrect: answer.score !== null && answer.score !== undefined ? Number(answer.score) > 0 : false,
+      explanation: answer.feedback || "",
+    })),
+  };
 }
 
 export async function getExams(params?: { courseId?: number }): Promise<Exam[]> {
   const response = await apiClient.get<ApiResponse<Exam[]>>(ENDPOINTS.EXAMS.LIST, { params });
-  return response.data.data;
+  return response.data.data.map((exam) => normalizeExam(exam));
 }
 
 export async function getExamDetail(id: number): Promise<Exam & { questions: ExamQuestion[] }> {
   const response = await apiClient.get<ApiResponse<Exam & { questions: ExamQuestion[] }>>(ENDPOINTS.EXAMS.DETAIL(id));
-  return response.data.data;
+  return normalizeExam(response.data.data);
 }
 
 export async function createExam(data: ExamPayload): Promise<Exam> {
-  const hasFiles = Boolean(data.attachments?.length);
-  const payload = hasFiles ? buildExamFormData(data) : data;
   const response = await apiClient.post<ApiResponse<Exam>>(
     ENDPOINTS.EXAMS.CREATE,
-    payload,
-    payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined
+    buildExamPayload(data)
   );
-  return response.data.data;
+  const exam = response.data.data;
+  await uploadExamAttachments(exam.id, data.attachments);
+  return getExamDetail(exam.id);
 }
 
 export async function updateExam(id: number, data: ExamPayload): Promise<Exam> {
-  const hasFiles = Boolean(data.attachments?.length);
-  const payload = hasFiles ? buildExamFormData(data) : data;
-  const response = await apiClient.patch<ApiResponse<Exam>>(
+  const response = await apiClient.put<ApiResponse<Exam>>(
     ENDPOINTS.EXAMS.UPDATE(id),
-    payload,
-    payload instanceof FormData ? { headers: { "Content-Type": "multipart/form-data" } } : undefined
+    buildExamPayload(data)
   );
-  return response.data.data;
+  const exam = response.data.data;
+  await uploadExamAttachments(exam.id, data.attachments);
+  return getExamDetail(exam.id);
 }
 
 export async function deleteExam(id: number): Promise<void> {
@@ -126,8 +226,8 @@ export async function deleteExam(id: number): Promise<void> {
 }
 
 export async function startExam(id: number): Promise<ExamQuestion[]> {
-  const response = await apiClient.get<ApiResponse<ExamQuestion[]>>(ENDPOINTS.EXAMS.TAKE(id));
-  return response.data.data;
+  const exam = await getExamDetail(id);
+  return exam.questions;
 }
 
 export async function submitExam(id: number, answers: Record<number, number | number[]>): Promise<void> {
@@ -135,32 +235,38 @@ export async function submitExam(id: number, answers: Record<number, number | nu
 }
 
 export async function getExamResult(id: number): Promise<ExamResult> {
-  const response = await apiClient.get<ApiResponse<ExamResult>>(ENDPOINTS.EXAMS.RESULT(id));
-  return response.data.data;
+  const response = await apiClient.get<ApiResponse<ExamSubmission>>(ENDPOINTS.EXAMS.RESULT(id));
+  return buildExamResult(normalizeSubmission(response.data.data));
 }
 
 export async function getExamSubmissions(id: number): Promise<ExamSubmission[]> {
   const response = await apiClient.get<ApiResponse<ExamSubmission[]>>(ENDPOINTS.EXAMS.SUBMISSIONS(id));
-  return response.data.data;
+  return response.data.data.map(normalizeSubmission);
 }
 
 export async function gradeExamSubmission(
   examId: number,
   payload: { submissionId: number; grade: number | null; feedback?: string }
 ): Promise<void> {
-  await apiClient.post(ENDPOINTS.EXAMS.GRADE(examId), payload);
+  await apiClient.put(ENDPOINTS.EXAMS.GRADE(examId), payload);
 }
 
 export async function downloadExamSubmissionFile(examId: number, submission: ExamSubmission): Promise<void> {
   await downloadFile(
-    submission.fileUrl || ENDPOINTS.EXAMS.DOWNLOAD_SUBMISSION(examId, submission.id),
+    buildDownloadUrls(
+      ENDPOINTS.EXAMS.DOWNLOAD_SUBMISSION(examId, submission.id),
+      submission.fileUrl || submission.url
+    ),
     `exam-submission-${submission.id}`
   );
 }
 
 export async function downloadExamAttachment(examId: number, attachment: ExamAttachment): Promise<void> {
   await downloadFile(
-    attachment.url || ENDPOINTS.EXAMS.DOWNLOAD_ATTACHMENT(examId, attachment.id),
+    buildDownloadUrls(
+      ENDPOINTS.EXAMS.DOWNLOAD_ATTACHMENT(examId, attachment.id),
+      attachment.downloadUrl || attachment.url || attachment.fileUrl || attachment.path
+    ),
     attachment.name
   );
 }

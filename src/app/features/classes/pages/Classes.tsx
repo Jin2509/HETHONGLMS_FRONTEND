@@ -6,19 +6,16 @@ import { canManageContent } from "../../../utils/permissions";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { useClasses } from "../hooks/useClasses";
-import { useCourses } from "../../courses/hooks/useCourses";
 import * as XLSX from "xlsx";
 
 export function Classes() {
   const { user } = useAuth();
   const userRole = user?.role || "student";
   const { classes, loading, fetchClasses, handleCreateClass } = useClasses();
-  const { courses, fetchCourses } = useCourses();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState("");
   const [formData, setFormData] = useState({
     name: "",
-    courseId: 0,
     instructorId: user?.id || 0,
     semester: "HK2 2025",
     studentIds: [] as string[],
@@ -26,13 +23,11 @@ export function Classes() {
 
   useEffect(() => {
     fetchClasses();
-    fetchCourses();
-  }, [fetchClasses, fetchCourses]);
+  }, [fetchClasses]);
 
   const handleCreate = () => {
     setFormData({
       name: "",
-      courseId: courses[0]?.id || 0,
       instructorId: user?.id || 0,
       semester: "HK2 2025",
       studentIds: [],
@@ -96,14 +91,13 @@ export function Classes() {
   };
 
   const handleSaveCreate = async () => {
-    if (!formData.name || !formData.courseId) {
-      toast.error("Vui lòng nhập tên lớp học và chọn khóa học");
+    if (!formData.name) {
+      toast.error("Vui lòng nhập tên lớp học");
       return;
     }
     try {
       await handleCreateClass({
         name: formData.name,
-        courseId: formData.courseId,
         instructorId: formData.instructorId,
         semester: formData.semester,
         studentIds: formData.studentIds,
@@ -200,21 +194,6 @@ export function Classes() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Khóa học *</label>
-            <select
-              value={formData.courseId}
-              onChange={(e) => setFormData({ ...formData, courseId: Number(e.target.value) })}
-              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
-            >
-              <option value={0} disabled>Chọn khóa học</option>
-              {courses.map((course) => (
-                <option key={course.id} value={course.id}>
-                  {course.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="block text-sm font-medium mb-2">Học kỳ *</label>
             <select
               value={formData.semester}
@@ -290,7 +269,7 @@ export function Classes() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveCreate}
-              disabled={!formData.name || !formData.courseId || loading}
+              disabled={!formData.name || loading}
               className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}

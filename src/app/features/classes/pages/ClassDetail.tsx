@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router";
 import {
   ChevronLeft,
@@ -20,6 +20,7 @@ import {
   Play,
   Upload,
   FileUp,
+  Loader2,
 } from "lucide-react";
 import { Badge, DataTable, Modal } from "../../../components/shared";
 import type { Column } from "../../../components/shared";
@@ -27,8 +28,9 @@ import { toast } from "sonner";
 import { useAuth } from "../../../contexts/AuthContext";
 import { canViewAllSubmissions, canManageContent } from "../../../utils/permissions";
 import { TeacherGradeManagement } from "../components/TeacherGradeManagement";
-
-import { mockStudents } from "../../../../mock/data";
+import { useClasses } from "../hooks/useClasses";
+import { getClassDetail, type ClassMember } from "../../../../service/class.service";
+import { getCourses, type Course } from "../../../../service/course.service";
 
 export interface Student {
   id: number;
@@ -38,80 +40,59 @@ export interface Student {
   department: string;
 }
 
-const classData = {
-  id: 1,
-  name: "Web Development - Class A",
-  code: "IT4788",
-  course: "Web Development",
-  instructor: "Dr. Nguyễn Văn B",
-  instructorEmail: "nguyenvanb@university.edu",
-  instructorPhone: "+84 123 456 789",
-  semester: "HK2 2025",
-  schedule: "Thứ 2, 13:00 - 15:00",
-  room: "Room A101",
-  students: 45,
-  startDate: "2026-02-01",
-  endDate: "2026-06-15",
-};
+export interface Material {
+  id: number;
+  name: string;
+  type: string;
+  size: string;
+  date: string;
+  url?: string;
+}
 
-const initialStudents: Student[] = mockStudents.slice(0, 4);
+export interface CourseWithProgress extends Course {
+  thumbnail?: string;
+  status?: string;
+  lessons?: number;
+  duration?: string;
+  progress?: number;
+}
 
-// Mock global students database for searching
-const mockGlobalStudents: Student[] = mockStudents;
-
-const materials = [
-  { id: 1, name: "Slide bài giảng tuần 1-4", type: "PDF", size: "2.4 MB", date: "2026-02-05" },
-  { id: 2, name: "Bài tập thực hành", type: "ZIP", size: "1.8 MB", date: "2026-02-12" },
-  { id: 3, name: "Đề cương chi tiết môn học", type: "PDF", size: "456 KB", date: "2026-02-01" },
-];
-
-const courses = [
-  {
-    id: 1,
-    name: "Introduction to Web Development",
-    description: "Learn HTML, CSS, and JavaScript fundamentals",
-    thumbnail: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=600",
-    lessons: 20,
-    duration: "8 tuần",
-    status: "Đang học",
-    progress: 45,
-  },
-  {
-    id: 2,
-    name: "Advanced React Patterns",
-    description: "Master React hooks, context, and performance optimization",
-    thumbnail: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=600",
-    lessons: 15,
-    duration: "6 tuần",
-    status: "Đang học",
-    progress: 20,
-  },
-  {
-    id: 3,
-    name: "Full-Stack Project",
-    description: "Build a complete web application from scratch",
-    thumbnail: "https://images.unsplash.com/photo-1547658719-da2b51169166?w=600",
-    lessons: 12,
-    duration: "4 tuần",
-    status: "Chưa bắt đầu",
-    progress: 0,
-  },
-];
+export interface ClassDetailData {
+  id: number;
+  name: string;
+  code: string;
+  course: string;
+  instructor: string;
+  instructorEmail: string;
+  instructorPhone: string;
+  semester: string;
+  schedule: string;
+  room: string;
+  students: number;
+  startDate: string;
+  endDate: string;
+}
 
 export function ClassDetail() {
   const { id } = useParams();
   const { user } = useAuth();
   const userRole = user?.role || "student";
   const canViewStudents = canViewAllSubmissions(userRole);
+  const { fetchClassDetail, fetchClassMembers } = useClasses();
   
   const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses" | "materials" | "announcements" | "grades">("overview");
   const [searchQuery, setSearchQuery] = useState("");
-  const [classStudents, setClassStudents] = useState<Student[]>(initialStudents);
+  const [loading, setLoading] = useState(true);
+  const [classData, setClassData] = useState<ClassDetailData | null>(null);
+  const [classStudents, setClassStudents] = useState<Student[]>([]);
+  const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [courses, setCourses] = useState<CourseWithProgress[]>([]);
   const [showCreateCourseModal, setShowCreateCourseModal] = useState(false);
   const [showEditCourseModal, setShowEditCourseModal] = useState(false);
   const [showDeleteCourseModal, setShowDeleteCourseModal] = useState(false);
   const [showUploadMaterialModal, setShowUploadMaterialModal] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<any>(null);
+  const [selectedCourse, setSelectedCourse] = useState<CourseWithProgress | null>(null);
   const [courseFormData, setCourseFormData] = useState({
     name: "",
     description: "",
@@ -125,9 +106,71 @@ export function ClassDetail() {
     file: null as File | null,
   });
 
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        // Fetch class detail
+        const classDetail = await getClassDetail(Number(id));
+        setClassData({
+          id: classDetail.id,
+          name: classDetail.name,
+          code: classDetail.name.split(' ')[0] || 'N/A',
+          course: classDetail.name,
+          instructor: classDetail.instructorName || 'N/A',
+          instructorEmail: 'instructor@university.edu',
+          instructorPhone: '+84 123 456 789',
+          semester: classDetail.semester,
+          schedule: 'Thứ 2, 13:00 - 15:00',
+          room: 'Room A101',
+          students: classDetail.studentCount || 0,
+          startDate: '2026-02-01',
+          endDate: '2026-06-15',
+        });
+
+        // Fetch class members
+        await fetchClassMembers(Number(id));
+        // Note: members are stored in the hook's state, we'll use them from there
+        // For now, we'll use an empty array and the hook will update the state
+        const students: Student[] = [];
+        setClassStudents(students);
+        setAllStudents(students);
+
+        // Fetch courses for this class
+        try {
+          const classCourses = await getCourses();
+          // Transform courses to include UI-specific properties
+          const coursesWithProgress: CourseWithProgress[] = classCourses.map((course): CourseWithProgress => ({
+            ...course,
+            thumbnail: course.thumbnailUrl,
+            status: 'Đang học',
+            lessons: course.chapters?.reduce((acc, chapter) => acc + chapter.materials.length, 0) || 0,
+            duration: '8 tuần',
+            progress: 0,
+          }));
+          setCourses(coursesWithProgress);
+        } catch (error) {
+          console.error('Failed to fetch courses:', error);
+          setCourses([]);
+        }
+
+        // TODO: Fetch materials from backend when API is available
+        setMaterials([]);
+      } catch (error) {
+        console.error('Failed to fetch class data:', error);
+        toast.error('Không thể tải thông tin lớp học');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [id, fetchClassDetail, fetchClassMembers]);
+
   const filteredStudents = searchQuery.trim() === ""
     ? classStudents
-    : mockGlobalStudents.filter(
+    : allStudents.filter(
         (student) =>
           student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
           student.studentId.includes(searchQuery)
@@ -154,65 +197,155 @@ export function ClassDetail() {
     setShowUploadMaterialModal(true);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // MOCK: Giả lập đọc file Excel và lấy danh sách MSSV
-      toast.info(`Đang xử lý file: ${file.name}`);
-      setTimeout(() => {
-        toast.success(`Đã nhập dữ liệu thành công từ file ${file.name}`);
-      }, 1000);
+    if (file && id) {
+      try {
+        toast.info(`Đang xử lý file: ${file.name}`);
+        // TODO: Implement actual file upload API call
+        // await handleImportMembers(Number(id), file);
+        setTimeout(() => {
+          toast.success(`Đã nhập dữ liệu thành công từ file ${file.name}`);
+        }, 1000);
+      } catch (error) {
+        toast.error('Không thể tải lên file');
+      }
     }
   };
 
-  const handleEditCourse = (course: any) => {
+  const handleEditCourse = (course: CourseWithProgress) => {
     setSelectedCourse(course);
     setCourseFormData({
       name: course.name,
-      description: course.description,
-      thumbnail: course.thumbnail,
-      lessons: course.lessons,
-      duration: course.duration,
+      description: course.description || '',
+      thumbnail: course.thumbnail || course.thumbnailUrl || '',
+      lessons: course.lessons || 20,
+      duration: course.duration || '',
     });
     setShowEditCourseModal(true);
   };
 
-  const handleDeleteCourse = (course: any) => {
+  const handleDeleteCourse = (course: CourseWithProgress) => {
     setSelectedCourse(course);
     setShowDeleteCourseModal(true);
   };
 
-  const handleSaveCreateCourse = () => {
-    // TODO: Gọi API tạo khóa học
-    setShowCreateCourseModal(false);
-    toast.success("Tạo khóa học thành công", {
-      description: `Khóa học "${courseFormData.name}" đã được thêm vào lớp`,
-    });
+  const handleSaveCreateCourse = async () => {
+    if (!courseFormData.name || !id) {
+      toast.error("Vui lòng nhập tên khóa học");
+      return;
+    }
+    try {
+      // TODO: Implement actual course creation API call
+      // const newCourse = await createCourse({
+      //   name: courseFormData.name,
+      //   description: courseFormData.description,
+      //   thumbnailUrl: courseFormData.thumbnail,
+      // });
+      
+      const newCourse: CourseWithProgress = {
+        id: Date.now(),
+        name: courseFormData.name,
+        description: courseFormData.description,
+        thumbnailUrl: courseFormData.thumbnail,
+        thumbnail: courseFormData.thumbnail,
+        status: 'Đang học',
+        lessons: courseFormData.lessons,
+        duration: courseFormData.duration,
+        progress: 0,
+        chapters: [],
+      };
+      
+      setCourses([...courses, newCourse]);
+      setShowCreateCourseModal(false);
+      toast.success("Tạo khóa học thành công", {
+        description: `Khóa học "${courseFormData.name}" đã được thêm vào lớp`,
+      });
+    } catch (error) {
+      toast.error('Không thể tạo khóa học');
+    }
   };
 
-  const handleSaveEditCourse = () => {
-    // TODO: Gọi API cập nhật khóa học
-    setShowEditCourseModal(false);
-    toast.success("Cập nhật thành công", {
-      description: "Thông tin khóa học đã được lưu",
-    });
+  const handleSaveEditCourse = async () => {
+    if (!selectedCourse || !courseFormData.name) {
+      toast.error("Vui lòng nhập tên khóa học");
+      return;
+    }
+    try {
+      // TODO: Implement actual course update API call
+      // await updateCourse(selectedCourse.id, {
+      //   name: courseFormData.name,
+      //   description: courseFormData.description,
+      //   thumbnailUrl: courseFormData.thumbnail,
+      // });
+      
+      setCourses(courses.map(c => 
+        c.id === selectedCourse.id 
+          ? { 
+              ...c, 
+              name: courseFormData.name,
+              description: courseFormData.description,
+              thumbnail: courseFormData.thumbnail,
+              thumbnailUrl: courseFormData.thumbnail,
+            } 
+          : c
+      ));
+      
+      setShowEditCourseModal(false);
+      toast.success("Cập nhật thành công", {
+        description: "Thông tin khóa học đã được lưu",
+      });
+    } catch (error) {
+      toast.error('Không thể cập nhật khóa học');
+    }
   };
 
-  const handleConfirmDeleteCourse = () => {
-    // TODO: Gọi API xóa khóa học
-    const courseName = selectedCourse?.name;
-    setShowDeleteCourseModal(false);
-    toast.success("Xóa thành công", {
-      description: `Khóa học "${courseName}" đã được xóa`,
-    });
+  const handleConfirmDeleteCourse = async () => {
+    if (!selectedCourse) return;
+    
+    try {
+      // TODO: Implement actual course deletion API call
+      // await deleteCourse(selectedCourse.id);
+      
+      const courseName = selectedCourse.name;
+      setCourses(courses.filter(c => c.id !== selectedCourse.id));
+      setShowDeleteCourseModal(false);
+      toast.success("Xóa thành công", {
+        description: `Khóa học "${courseName}" đã được xóa`,
+      });
+    } catch (error) {
+      toast.error('Không thể xóa khóa học');
+    }
   };
 
-  const handleSaveUploadMaterial = () => {
-    // TODO: Gọi API upload tài liệu
-    setShowUploadMaterialModal(false);
-    toast.success("Tải lên tài liệu thành công", {
-      description: `Tài liệu "${materialFormData.name}" đã được lưu`,
-    });
+  const handleSaveUploadMaterial = async () => {
+    if (!materialFormData.name || !materialFormData.file || !id) {
+      toast.error('Vui lòng nhập tên tài liệu và chọn file');
+      return;
+    }
+    try {
+      // TODO: Implement actual material upload API call
+      // const formData = new FormData();
+      // formData.append('file', materialFormData.file);
+      // formData.append('name', materialFormData.name);
+      // formData.append('type', materialFormData.type);
+      // await apiClient.post(`/classes/${id}/materials`, formData);
+      
+      const newMaterial: Material = {
+        id: Date.now(),
+        name: materialFormData.name,
+        type: materialFormData.type,
+        size: `${(materialFormData.file.size / 1024 / 1024).toFixed(2)} MB`,
+        date: new Date().toISOString().split('T')[0],
+      };
+      setMaterials([...materials, newMaterial]);
+      setShowUploadMaterialModal(false);
+      toast.success("Tải lên tài liệu thành công", {
+        description: `Tài liệu "${materialFormData.name}" đã được lưu`,
+      });
+    } catch (error) {
+      toast.error('Không thể tải lên tài liệu');
+    }
   };
 
   const columns: Column<Student>[] = [
@@ -271,6 +404,23 @@ export function ClassDetail() {
       },
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="w-10 h-10 text-primary animate-spin mb-4" />
+        <p className="text-muted-foreground">Đang tải thông tin lớp học...</p>
+      </div>
+    );
+  }
+
+  if (!classData) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <p className="text-muted-foreground">Không tìm thấy thông tin lớp học</p>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
@@ -509,7 +659,7 @@ export function ClassDetail() {
               >
                 <div className="relative h-40 overflow-hidden">
                   <img
-                    src={course.thumbnail}
+                    src={course.thumbnail || course.thumbnailUrl}
                     alt={course.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />

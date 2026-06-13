@@ -13,24 +13,25 @@ export interface Class {
 }
 
 export interface ClassMember {
-  userId: number;
+  id?: number;
+  userId?: number;
   name: string;
   email: string;
   studentId?: string;
+  phone?: string;
+  department?: string;
   enrolledAt: string;
 }
 
 export interface CreateClassData {
   name: string;
-  courseId: number;
-  instructorId: number;
+  instructorId?: number;
   semester: string;
   studentIds?: string[];
 }
 
 export interface UpdateClassData {
   name?: string;
-  courseId?: number;
   instructorId?: number;
   semester?: string;
 }
@@ -75,7 +76,7 @@ export async function createClass(data: CreateClassData): Promise<Class> {
 }
 
 export async function updateClass(id: number, data: UpdateClassData): Promise<Class> {
-  const response = await apiClient.patch<ApiResponse<Class> | Class>(ENDPOINTS.CLASSES.UPDATE(id), data);
+  const response = await apiClient.put<ApiResponse<Class> | Class>(ENDPOINTS.CLASSES.UPDATE(id), data);
   return unwrapData<Class>(response.data);
 }
 
