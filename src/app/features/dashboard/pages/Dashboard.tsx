@@ -1,5 +1,6 @@
 import { useAuth } from "../../../contexts/AuthContext";
 import { Link } from "react-router";
+import { useState, useEffect } from "react";
 import { 
   BookOpen, 
   FileCheck, 
@@ -14,45 +15,7 @@ import {
   ChevronRight
 } from "lucide-react";
 import { getVietnamTime } from "../../../utils/datetime";
-
-// --- STUDENT MOCK DATA ---
-const studentStats = [
-  { icon: BookOpen, label: "Khóa học đang học", value: "8", color: "text-primary" },
-  { icon: FileCheck, label: "Bài thi tuần này", value: "3", color: "text-warning" },
-  { icon: Award, label: "Điểm TB", value: "8.5", color: "text-success" },
-];
-
-const studentRecentActivity = [
-  { icon: CheckCircle2, action: "Hoàn thành bài tập: React Hooks", time: "2 giờ trước", color: "text-success" },
-  { icon: FileCheck, action: "Nộp bài: Database Design", time: "5 giờ trước", color: "text-primary" },
-  { icon: Award, action: "Đạt điểm A cho bài kiểm tra Midterm", time: "1 ngày trước", color: "text-warning" },
-];
-
-// --- TEACHER MOCK DATA ---
-const teacherStats = [
-  { icon: GraduationCap, label: "Lớp học đang dạy", value: "4", color: "text-primary" },
-  { icon: ClipboardList, label: "Bài tập đã giao", value: "24", color: "text-success" },
-  { icon: FileCheck, label: "Kỳ thi sắp tới", value: "2", color: "text-warning" },
-];
-
-const teacherRecentActivity = [
-  { icon: CheckCircle2, action: "Đã chấm điểm lớp Web Dev - A", time: "1 giờ trước", color: "text-success" },
-  { icon: Plus, action: "Tạo bài tập mới: React State Management", time: "3 giờ trước", color: "text-primary" },
-  { icon: AlertCircle, action: "15 bài nộp mới cần chấm điểm", time: "5 giờ trước", color: "text-warning" },
-];
-
-// --- ADMIN MOCK DATA ---
-const adminStats = [
-  { icon: Users, label: "Tổng người dùng", value: "1,250", color: "text-primary" },
-  { icon: GraduationCap, label: "Tổng lớp học", value: "32", color: "text-success" },
-  { icon: BookOpen, label: "Tổng khóa học", value: "48", color: "text-warning" },
-];
-
-const adminRecentActivity = [
-  { icon: Users, action: "Đã thêm 5 sinh viên mới", time: "30 phút trước", color: "text-primary" },
-  { icon: CheckCircle2, action: "Hệ thống đã sao lưu dữ liệu", time: "2 giờ trước", color: "text-success" },
-  { icon: AlertCircle, action: "Cảnh báo: Bộ nhớ server đạt 85%", time: "4 giờ trước", color: "text-warning" },
-];
+import { getSystemStats } from "../../../../service/report.service";
 
 const upcomingDeadlines = [
   { name: "Assignment: React Project", course: "Web Dev", due: "2 ngày nữa", urgency: "green" },
@@ -60,9 +23,8 @@ const upcomingDeadlines = [
   { name: "Final Exam: Database", course: "Database", due: "6 giờ nữa", urgency: "red" },
 ];
 
-import { Plus } from "lucide-react"; // Re-import to avoid error if missing
+import { Plus } from "lucide-react";
 
-// --- ADDITIONAL MOCK DATA ---
 const continueCourses = [
   {
     id: 1,
@@ -91,9 +53,43 @@ const adminSystemHealth = [
   { name: "Database", value: 12, status: "Normal" },
 ];
 
+const studentRecentActivity = [
+  { icon: CheckCircle2, action: "Hoàn thành bài tập: React Hooks", time: "2 giờ trước", color: "text-success" },
+  { icon: FileCheck, action: "Nộp bài: Database Design", time: "5 giờ trước", color: "text-primary" },
+  { icon: Award, action: "Đạt điểm A cho bài kiểm tra Midterm", time: "1 ngày trước", color: "text-warning" },
+];
+
+const teacherRecentActivity = [
+  { icon: CheckCircle2, action: "Đã chấm điểm lớp Web Dev - A", time: "1 giờ trước", color: "text-success" },
+  { icon: Plus, action: "Tạo bài tập mới: React State Management", time: "3 giờ trước", color: "text-primary" },
+  { icon: AlertCircle, action: "15 bài nộp mới cần chấm điểm", time: "5 giờ trước", color: "text-warning" },
+];
+
+const adminRecentActivity = [
+  { icon: Users, action: "Đã thêm 5 sinh viên mới", time: "30 phút trước", color: "text-primary" },
+  { icon: CheckCircle2, action: "Hệ thống đã sao lưu dữ liệu", time: "2 giờ trước", color: "text-success" },
+  { icon: AlertCircle, action: "Cảnh báo: Bộ nhớ server đạt 85%", time: "4 giờ trước", color: "text-warning" },
+];
+
 export function Dashboard() {
   const { user } = useAuth();
   const role = user?.role || "student";
+  const [systemStats, setSystemStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const data = await getSystemStats();
+        setSystemStats(data);
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchStats();
+  }, []);
 
   const getGreeting = () => {
     const hour = getVietnamTime().getHours();
@@ -104,9 +100,24 @@ export function Dashboard() {
 
   const getStats = () => {
     switch (role) {
-      case "admin": return adminStats;
-      case "teacher": return teacherStats;
-      default: return studentStats;
+      case "admin":
+        return [
+          { icon: Users, label: "Tổng người dùng", value: systemStats?.totalUsers?.toString() || "0", color: "text-primary" },
+          { icon: GraduationCap, label: "Tổng lớp học", value: "32", color: "text-success" },
+          { icon: BookOpen, label: "Tổng khóa học", value: systemStats?.totalCourses?.toString() || "0", color: "text-warning" },
+        ];
+      case "teacher":
+        return [
+          { icon: GraduationCap, label: "Lớp học đang dạy", value: "4", color: "text-primary" },
+          { icon: ClipboardList, label: "Bài tập đã giao", value: "24", color: "text-success" },
+          { icon: FileCheck, label: "Kỳ thi sắp tới", value: "2", color: "text-warning" },
+        ];
+      default:
+        return [
+          { icon: BookOpen, label: "Khóa học đang học", value: "8", color: "text-primary" },
+          { icon: FileCheck, label: "Bài thi tuần này", value: "3", color: "text-warning" },
+          { icon: Award, label: "Điểm TB", value: "8.5", color: "text-success" },
+        ];
     }
   };
 
@@ -120,6 +131,14 @@ export function Dashboard() {
 
   const currentStats = getStats();
   const currentActivity = getRecentActivity();
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Download, Upload, FileSpreadsheet, UserPlus, Loader2 } from "lucide-react";
+import { Search, Plus, Edit, Trash2, CheckCircle, XCircle, Download, Upload, FileSpreadsheet, Loader2 } from "lucide-react";
 import { Modal, Badge, DataTable } from "../../../components/shared";
 import type { Column } from "../../../components/shared";
 import * as XLSX from "xlsx";
@@ -20,6 +20,7 @@ export function AdminUsers() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -40,8 +41,9 @@ export function AdminUsers() {
     try {
       setIsLoading(true);
       const response = await getUsers({
-        query: searchQuery,
+        search: searchQuery,
         role: roleFilter === "all" ? undefined : roleFilter,
+        status: statusFilter === "all" ? undefined : statusFilter,
       });
       setUsers(response.data);
     } catch (error: any) {
@@ -51,7 +53,7 @@ export function AdminUsers() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, roleFilter]);
+  }, [searchQuery, roleFilter, statusFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -61,7 +63,7 @@ export function AdminUsers() {
   }, [fetchUsers]);
 
   const getRoleBadge = (role: string) => {
-    switch (role) {
+    switch (role?.toLowerCase()) {
       case "admin":
         return "danger";
       case "teacher":
@@ -74,7 +76,7 @@ export function AdminUsers() {
   };
 
   const getRoleLabel = (role: string) => {
-    switch (role) {
+    switch (role?.toLowerCase()) {
       case "admin":
         return "Quản trị viên";
       case "teacher":
@@ -87,7 +89,7 @@ export function AdminUsers() {
   };
 
   const handleCreate = async () => {
-    if (!formData.name || !formData.email) {
+    if (!formData.name.trim() || !formData.email.trim()) {
       toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
       return;
     }
@@ -155,10 +157,10 @@ export function AdminUsers() {
   const openEditModal = (user: User) => {
     setSelectedUser(user);
     setFormData({
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      status: user.status,
+      name: user.name || "",
+      email: user.email || "",
+      role: (user.role?.toLowerCase() || "student") as CreateUserData["role"],
+      status: (user.status?.toLowerCase() || "active") as CreateUserData["status"],
       studentId: user.studentId || "",
       phone: user.phone || "",
     });
@@ -181,6 +183,7 @@ export function AdminUsers() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
       toast.dismiss();
       toast.success("Xuất file thành công");
     } catch (error) {
@@ -246,7 +249,7 @@ export function AdminUsers() {
       render: (value, row) => (
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center font-medium">
-            {row.name.charAt(0)}
+            {(row.name || "?").charAt(0).toUpperCase()}
           </div>
           <div>
             <p className="font-medium">{value as string}</p>
@@ -286,7 +289,7 @@ export function AdminUsers() {
       key: "status",
       label: "Trạng thái",
       render: (value) =>
-        value === "active" ? (
+        String(value).toLowerCase() === "active" ? (
           <span className="flex items-center gap-1 text-success">
             <CheckCircle className="w-4 h-4" />
             <span className="text-sm">Hoạt động</span>
@@ -342,19 +345,19 @@ export function AdminUsers() {
         </div>
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
           <p className="text-2xl font-bold text-success mb-1">
-            {isLoading ? "..." : users.filter((u) => u.role === "student").length}
+            {isLoading ? "..." : users.filter((u) => u.role?.toLowerCase() === "student").length}
           </p>
           <p className="text-sm text-muted-foreground">Sinh viên</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
           <p className="text-2xl font-bold text-primary mb-1">
-            {isLoading ? "..." : users.filter((u) => u.role === "teacher").length}
+            {isLoading ? "..." : users.filter((u) => u.role?.toLowerCase() === "teacher").length}
           </p>
           <p className="text-sm text-muted-foreground">Giảng viên</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
           <p className="text-2xl font-bold text-destructive mb-1">
-            {isLoading ? "..." : users.filter((u) => u.role === "admin").length}
+            {isLoading ? "..." : users.filter((u) => u.role?.toLowerCase() === "admin").length}
           </p>
           <p className="text-sm text-muted-foreground">Quản trị viên</p>
         </div>
@@ -382,6 +385,16 @@ export function AdminUsers() {
           <option value="student">Sinh viên</option>
           <option value="teacher">Giảng viên</option>
           <option value="admin">Quản trị viên</option>
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 bg-card border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <option value="all">Tất cả trạng thái</option>
+          <option value="active">Hoạt động</option>
+          <option value="inactive">Ngừng</option>
         </select>
 
         <div className="flex gap-2 ml-auto">
@@ -513,7 +526,7 @@ export function AdminUsers() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">
-              MSSV / Mã GV {formData.role === "student" && "*"}
+              MSSV / Mã GV
             </label>
             <input
               type="text"

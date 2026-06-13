@@ -4,11 +4,14 @@ import {
   getClassDetail, 
   getClassMembers, 
   createClass, 
+  updateClass,
+  deleteClass,
   enrollStudent, 
   importClassMembers,
   type Class,
   type ClassMember,
-  type CreateClassData 
+  type CreateClassData,
+  type UpdateClassData 
 } from "../../../../service/class.service";
 import { toast } from "sonner";
 
@@ -22,7 +25,7 @@ export function useClasses() {
     setLoading(true);
     try {
       const data = await getClasses();
-      setClasses(data);
+      setClasses(Array.isArray(data) ? data : []);
     } catch (error: any) {
       const message = error.response?.data?.message || "Không thể tải danh sách lớp học";
       toast.error(message);
@@ -62,6 +65,7 @@ export function useClasses() {
     try {
       const newClass = await createClass(data);
       toast.success("Tạo lớp học thành công");
+      fetchClasses();
       return newClass;
     } catch (error: any) {
       const message = error.response?.data?.message || "Không thể tạo lớp học";
@@ -72,7 +76,44 @@ export function useClasses() {
     }
   };
 
-  const handleEnrollStudent = async (classId: number, studentId: number) => {
+  const handleUpdateClass = async (id: number, data: UpdateClassData) => {
+    setLoading(true);
+    try {
+      const updatedClass = await updateClass(id, data);
+      toast.success("Cập nhật lớp học thành công");
+      setClasses(prev => prev.map(c => c.id === id ? updatedClass : c));
+      if (classDetail?.id === id) {
+        setClassDetail(updatedClass);
+      }
+      return updatedClass;
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Không thể cập nhật lớp học";
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteClass = async (id: number) => {
+    setLoading(true);
+    try {
+      await deleteClass(id);
+      toast.success("Xóa lớp học thành công");
+      setClasses(prev => prev.filter(c => c.id !== id));
+      if (classDetail?.id === id) {
+        setClassDetail(null);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Không thể xóa lớp học";
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEnrollStudent = async (classId: number, studentId: number | string) => {
     try {
       await enrollStudent(classId, studentId);
       toast.success("Thêm sinh viên thành công");
@@ -106,6 +147,8 @@ export function useClasses() {
     fetchClassDetail,
     fetchClassMembers,
     handleCreateClass,
+    handleUpdateClass,
+    handleDeleteClass,
     handleEnrollStudent,
     handleImportMembers,
   };

@@ -3,6 +3,7 @@ import { Download, Eye, Save, FileText, Calendar, Users, Clock } from "lucide-re
 import { toast } from "sonner";
 import { useAssignment } from "../hooks/useAssignment";
 import type { AssignmentStats, Submission } from "../types/assignment.types";
+import { downloadSubmissionFile } from "../../../../service/assignment.service";
 
 interface TeacherGradingPanelProps {
   assignmentId: number;
@@ -23,6 +24,17 @@ export function TeacherGradingPanel({ assignmentId, stats, submissions }: Teache
   } = useAssignment(submissions);
 
   const handleSaveGrades = async () => {
+    const invalidSubmission = submissions.find((submission) => {
+      const grade = grades[submission.id];
+      return grade !== null && grade !== undefined && (Number.isNaN(grade) || grade < 0 || grade > stats.maxScore);
+    });
+    if (invalidSubmission) {
+      toast.error("Điểm không hợp lệ", {
+        description: `Điểm phải nằm trong khoảng 0-${stats.maxScore}`,
+      });
+      return;
+    }
+
     try {
       await saveGrades(assignmentId);
       toast.success("Lưu điểm thành công", {
@@ -33,11 +45,21 @@ export function TeacherGradingPanel({ assignmentId, stats, submissions }: Teache
     }
   };
 
+  const handleDownloadSubmission = async (submission: Submission) => {
+    try {
+      await downloadSubmissionFile(assignmentId, submission);
+    } catch {
+      toast.error("Không thể tải file bài làm");
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "Đã nộp":
+      case "submitted":
         return "bg-warning/10 text-warning";
       case "Đã chấm":
+      case "graded":
         return "bg-success/10 text-success";
       default:
         return "bg-slate-100 text-slate-700";
@@ -140,10 +162,17 @@ export function TeacherGradingPanel({ assignmentId, stats, submissions }: Teache
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <button className="flex items-center gap-2 text-primary hover:underline">
-                        <Download className="w-4 h-4" />
-                        <span className="text-sm">{submission.file}</span>
-                      </button>
+                      {submission.file || submission.fileUrl ? (
+                        <button
+                          onClick={() => handleDownloadSubmission(submission)}
+                          className="flex items-center gap-2 text-primary hover:underline"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span className="text-sm">{submission.file || "Tải file"}</span>
+                        </button>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Không có file</span>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <input
@@ -153,7 +182,7 @@ export function TeacherGradingPanel({ assignmentId, stats, submissions }: Teache
                         step="0.5"
                         value={grades[submission.id] || ""}
                         onChange={(e) =>
-                          updateGrade(submission.id, parseFloat(e.target.value) || null)
+                          updateGrade(submission.id, e.target.value === "" ? null : Number(e.target.value))
                         }
                         className="w-20 px-3 py-1.5 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder={`0-${stats.maxScore}`}

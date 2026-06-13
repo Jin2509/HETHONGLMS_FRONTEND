@@ -4,7 +4,8 @@ import type {
   Exam, 
   ExamQuestion, 
   ExamSubmission, 
-  ExamResult 
+  ExamResult,
+  ExamPayload
 } from "../../../../service/exam.service";
 
 export function useExam() {
@@ -71,7 +72,7 @@ export function useExam() {
     }
   }, []);
 
-  const createExam = async (data: Partial<Exam>) => {
+  const createExam = async (data: ExamPayload) => {
     setLoading(true);
     setError(null);
     try {
@@ -84,7 +85,7 @@ export function useExam() {
     }
   };
 
-  const updateExam = async (id: number, data: Partial<Exam>) => {
+  const updateExam = async (id: number, data: ExamPayload) => {
     setLoading(true);
     setError(null);
     try {

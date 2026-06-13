@@ -35,26 +35,27 @@ export interface ReportStats {
   monthlySubmissions: number;
 }
 
+export interface ApiResponse<T> {
+  message: string;
+  data: T;
+}
+
 export async function getSystemStats(): Promise<ReportStats> {
-  // TODO: connect to real API
-  const response = await apiClient.get<ReportStats>(ENDPOINTS.REPORTS.STATS);
-  return response.data;
+  const response = await apiClient.get<ApiResponse<ReportStats>>(ENDPOINTS.REPORTS.STATS);
+  return response.data.data;
 }
 
 export async function getEnrollmentTrend(): Promise<EnrollmentTrend[]> {
-  // TODO: connect to real API
-  const response = await apiClient.get<EnrollmentTrend[]>(ENDPOINTS.REPORTS.ENROLLMENT);
-  return response.data;
+  const response = await apiClient.get<ApiResponse<EnrollmentTrend[]>>(ENDPOINTS.REPORTS.ENROLLMENT);
+  return response.data.data;
 }
 
 export async function getSubmissionByCourse(): Promise<SubmissionByCourse[]> {
-  // TODO: connect to real API
-  const response = await apiClient.get<SubmissionByCourse[]>(ENDPOINTS.REPORTS.SUBMISSIONS);
-  return response.data;
+  const response = await apiClient.get<ApiResponse<SubmissionByCourse[]>>(ENDPOINTS.REPORTS.SUBMISSIONS);
+  return response.data.data;
 }
 
 export async function getTopStudents(): Promise<TopStudent[]> {
-  // TODO: connect to real API
-  const response = await apiClient.get<TopStudent[]>(ENDPOINTS.REPORTS.TOP_STUDENTS);
-  return response.data;
+  const response = await apiClient.get<ApiResponse<TopStudent[]>>(ENDPOINTS.REPORTS.TOP_STUDENTS);
+  return response.data.data;
 }

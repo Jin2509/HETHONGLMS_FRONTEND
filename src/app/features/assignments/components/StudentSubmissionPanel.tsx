@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { Upload, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "../../../contexts/AuthContext";
 import { useAssignment } from "../hooks/useAssignment";
+import type { Submission } from "../types/assignment.types";
 
 interface StudentSubmissionPanelProps {
   assignmentId: string | undefined;
+  submissions?: Submission[];
 }
 
-export function StudentSubmissionPanel({ assignmentId }: StudentSubmissionPanelProps) {
+export function StudentSubmissionPanel({ assignmentId, submissions = [] }: StudentSubmissionPanelProps) {
+  const { user } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [textSubmission, setTextSubmission] = useState("");
   const { submitAssignmentWork, loading } = useAssignment();
@@ -20,11 +24,16 @@ export function StudentSubmissionPanel({ assignmentId }: StudentSubmissionPanelP
 
   const handleSubmit = async () => {
     if (!assignmentId || !selectedFile) return;
+    if (!user?.id) {
+      toast.error("Không tìm thấy thông tin sinh viên");
+      return;
+    }
     
     try {
       await submitAssignmentWork(parseInt(assignmentId), { 
         file: selectedFile, 
-        note: textSubmission 
+        note: textSubmission,
+        studentId: user.id,
       });
       toast.success("Nộp bài thành công", {
         description: "Bài tập của bạn đã được ghi nhận",
@@ -101,12 +110,32 @@ export function StudentSubmissionPanel({ assignmentId }: StudentSubmissionPanelP
         </button>
       </div>
 
-      {/* Submission History - Hidden when no submissions yet */}
       <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
         <h3 className="font-semibold mb-4">Lịch sử nộp bài</h3>
-        <p className="text-sm text-muted-foreground italic text-center py-4">
-          Chưa có lịch sử nộp bài cho bài tập này.
-        </p>
+        {submissions.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic text-center py-4">
+            Chưa có lịch sử nộp bài cho bài tập này.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {submissions.map((submission) => (
+              <div key={submission.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{submission.file || "Bài nộp"}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{submission.submittedAt}</p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
+                    {submission.grade !== null ? `${submission.grade} điểm` : "Đang chờ chấm"}
+                  </span>
+                </div>
+                {submission.feedback && (
+                  <p className="mt-2 text-xs text-muted-foreground">{submission.feedback}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

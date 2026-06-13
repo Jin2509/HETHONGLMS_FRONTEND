@@ -33,19 +33,24 @@ export interface StudentGradeUpdate {
   participation?: number;
 }
 
+export interface ApiResponse<T> {
+  message: string;
+  data: T;
+}
+
 export async function getMyGrades(params?: { semester?: string; type?: string; query?: string }): Promise<UserGrade[]> {
-  const response = await apiClient.get(ENDPOINTS.GRADES.MY_GRADES, { params });
-  return response.data;
+  const response = await apiClient.get<ApiResponse<UserGrade[]>>(ENDPOINTS.GRADES.MY_GRADES, { params });
+  return response.data.data;
 }
 
 export async function getCourseGrades(courseId: number): Promise<CourseGrade[]> {
-  const response = await apiClient.get<CourseGrade[]>(ENDPOINTS.GRADES.COURSE_GRADES(courseId));
-  return response.data;
+  const response = await apiClient.get<ApiResponse<CourseGrade[]>>(ENDPOINTS.GRADES.COURSE_GRADES(courseId));
+  return response.data.data;
 }
 
 export async function getGradesByClass(classId: number): Promise<CourseGrade[]> {
-  const response = await apiClient.get<CourseGrade[]>(ENDPOINTS.GRADES.CLASS_GRADES(classId));
-  return response.data;
+  const response = await apiClient.get<ApiResponse<CourseGrade[]>>(ENDPOINTS.GRADES.CLASS_GRADES(classId));
+  return response.data.data;
 }
 
 export async function updateGrade(classId: number, data: StudentGradeUpdate): Promise<void> {
@@ -53,8 +58,8 @@ export async function updateGrade(classId: number, data: StudentGradeUpdate): Pr
 }
 
 export async function getGradeTrend(): Promise<GradeTrend[]> {
-  const response = await apiClient.get<GradeTrend[]>(`${ENDPOINTS.GRADES.LIST}/trend`);
-  return response.data;
+  const response = await apiClient.get<ApiResponse<GradeTrend[]>>(`${ENDPOINTS.GRADES.LIST}/trend`);
+  return response.data.data;
 }
 
 export async function exportGrades(semester: string): Promise<Blob> {

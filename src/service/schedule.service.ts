@@ -26,26 +26,31 @@ export interface CreateEventData {
   color?: string;
 }
 
+export interface ApiResponse<T> {
+  message: string;
+  data: T;
+}
+
 export async function getSchedule(params?: {
   week?: number;
   month?: string;
   courseId?: number;
 }): Promise<ScheduleEvent[]> {
-  const response = await apiClient.get<ScheduleEvent[]>(ENDPOINTS.SCHEDULE.LIST, { params });
-  return response.data;
+  const response = await apiClient.get<ApiResponse<ScheduleEvent[]>>(ENDPOINTS.SCHEDULE.LIST, { params });
+  return response.data.data;
 }
 
 export async function createEvent(data: CreateEventData): Promise<ScheduleEvent> {
-  const response = await apiClient.post<ScheduleEvent>(ENDPOINTS.SCHEDULE.CREATE, data);
-  return response.data;
+  const response = await apiClient.post<ApiResponse<ScheduleEvent>>(ENDPOINTS.SCHEDULE.CREATE, data);
+  return response.data.data;
 }
 
 export async function updateEvent(
   id: number,
   data: Partial<CreateEventData>
 ): Promise<ScheduleEvent> {
-  const response = await apiClient.patch<ScheduleEvent>(ENDPOINTS.SCHEDULE.UPDATE(id), data);
-  return response.data;
+  const response = await apiClient.patch<ApiResponse<ScheduleEvent>>(ENDPOINTS.SCHEDULE.UPDATE(id), data);
+  return response.data.data;
 }
 
 export async function deleteEvent(id: number): Promise<void> {

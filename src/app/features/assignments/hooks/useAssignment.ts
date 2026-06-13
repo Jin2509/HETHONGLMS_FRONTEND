@@ -114,7 +114,7 @@ export function useAssignment(initialSubmissions: Submission[] = []) {
     }
   };
 
-  const submitAssignmentWork = async (assignmentId: number, data: { file: File; note?: string }) => {
+  const submitAssignmentWork = async (assignmentId: number, data: { file: File; note?: string; studentId: number }) => {
     setLoading(true);
     setError(null);
     try {

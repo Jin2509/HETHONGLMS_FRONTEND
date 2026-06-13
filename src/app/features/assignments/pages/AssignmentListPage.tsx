@@ -10,6 +10,7 @@ import { AssignmentFormModal } from "../components/AssignmentFormModal";
 import type { Assignment, AssignmentFormData } from "../types/assignment.types";
 import { useAssignment } from "../hooks/useAssignment";
 import { useEffect } from "react";
+import { useCourses } from "../../courses/hooks/useCourses";
 
 export function AssignmentListPage() {
   const { user } = useAuth();
@@ -22,6 +23,7 @@ export function AssignmentListPage() {
     updateAssignment,
     deleteAssignment,
   } = useAssignment();
+  const { courses, fetchCourses } = useCourses();
 
   const [activeTab, setActiveTab] = useState<"all" | "pending" | "submitted" | "graded">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,6 +34,7 @@ export function AssignmentListPage() {
   const [formData, setFormData] = useState<AssignmentFormData>({
     name: "",
     course: "",
+    courseId: 0,
     dueDate: "",
     dueTime: "",
     description: "",
@@ -41,7 +44,8 @@ export function AssignmentListPage() {
 
   useEffect(() => {
     fetchAssignments();
-  }, [fetchAssignments]);
+    fetchCourses();
+  }, [fetchAssignments, fetchCourses]);
 
   const filteredAssignments = assignments.filter((assignment) => {
     // Search filter
@@ -60,7 +64,8 @@ export function AssignmentListPage() {
   const handleCreate = () => {
     setFormData({
       name: "",
-      course: "",
+      course: courses[0]?.name || "",
+      courseId: courses[0]?.id || 0,
       dueDate: getVietnamDateInputValue(),
       dueTime: "23:59",
       description: "",
@@ -71,12 +76,14 @@ export function AssignmentListPage() {
   };
 
   const handleEdit = (assignment: Assignment) => {
+    const [dueDate = assignment.dueDate, dueTimeWithSeconds = "23:59"] = assignment.dueDate.split("T");
     setSelectedAssignment(assignment);
     setFormData({
       name: assignment.name,
       course: assignment.course,
-      dueDate: assignment.dueDate,
-      dueTime: "23:59",
+      courseId: assignment.courseId || courses.find((course) => course.name === assignment.course)?.id || 0,
+      dueDate,
+      dueTime: dueTimeWithSeconds.slice(0, 5),
       description: assignment.description || "",
       maxScore: assignment.maxScore || 10,
       attachments: [],
@@ -90,8 +97,12 @@ export function AssignmentListPage() {
   };
 
   const handleSaveCreate = async () => {
+    if (!formData.courseId) {
+      toast.error("Vui lòng chọn môn học");
+      return;
+    }
     try {
-      await createAssignment({ ...formData, courseId: 1 }); // MOCK courseId
+      await createAssignment(formData);
       setShowCreateModal(false);
       toast.success("Tạo bài tập thành công", {
         description: `Bài tập "${formData.name}" đã được thêm vào khóa học`,
@@ -219,6 +230,7 @@ export function AssignmentListPage() {
         onFormDataChange={setFormData}
         onSubmit={handleSaveCreate}
         submitLabel="Tạo bài tập"
+        courses={courses}
       />
 
       {/* Edit Modal */}
@@ -230,6 +242,7 @@ export function AssignmentListPage() {
         onFormDataChange={setFormData}
         onSubmit={handleSaveEdit}
         submitLabel="Lưu thay đổi"
+        courses={courses}
       />
 
       {/* Delete Modal */}

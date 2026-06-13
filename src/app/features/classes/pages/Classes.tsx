@@ -6,16 +6,19 @@ import { canManageContent } from "../../../utils/permissions";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { useClasses } from "../hooks/useClasses";
+import { useCourses } from "../../courses/hooks/useCourses";
+import * as XLSX from "xlsx";
 
 export function Classes() {
   const { user } = useAuth();
   const userRole = user?.role || "student";
   const { classes, loading, fetchClasses, handleCreateClass } = useClasses();
+  const { courses, fetchCourses } = useCourses();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState("");
   const [formData, setFormData] = useState({
     name: "",
-    courseId: 1, // Mặc định cho demo
+    courseId: 0,
     instructorId: user?.id || 0,
     semester: "HK2 2025",
     studentIds: [] as string[],
@@ -23,12 +26,13 @@ export function Classes() {
 
   useEffect(() => {
     fetchClasses();
-  }, [fetchClasses]);
+    fetchCourses();
+  }, [fetchClasses, fetchCourses]);
 
   const handleCreate = () => {
     setFormData({
       name: "",
-      courseId: 1,
+      courseId: courses[0]?.id || 0,
       instructorId: user?.id || 0,
       semester: "HK2 2025",
       studentIds: [],
@@ -60,22 +64,40 @@ export function Classes() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      toast.info(`Đang xử lý file: ${file.name}`);
-      setTimeout(() => {
-        const mockIds = ["20210001", "20210002", "20210003", "20210004", "20210005"];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = event.target?.result;
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { header: 1 });
+        const ids = rows
+          .flat()
+          .map((value) => String(value || "").trim())
+          .filter((value) => /^\d{5,}$/.test(value));
+
+        if (ids.length === 0) {
+          toast.error("Không tìm thấy mã sinh viên hợp lệ trong file");
+          return;
+        }
+
         setFormData((prev) => ({
           ...prev,
-          studentIds: Array.from(new Set([...prev.studentIds, ...mockIds])),
+          studentIds: Array.from(new Set([...prev.studentIds, ...ids])),
         }));
-        toast.success(`Đã thêm ${mockIds.length} sinh viên từ file`);
-      }, 1000);
-    }
+        toast.success(`Đã thêm ${ids.length} mã sinh viên từ file`);
+      } catch {
+        toast.error("Không thể đọc file danh sách sinh viên");
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const handleSaveCreate = async () => {
-    if (!formData.name) {
-      toast.error("Vui lòng nhập tên lớp học");
+    if (!formData.name || !formData.courseId) {
+      toast.error("Vui lòng nhập tên lớp học và chọn khóa học");
       return;
     }
     try {
@@ -178,6 +200,21 @@ export function Classes() {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium mb-2">Khóa học *</label>
+            <select
+              value={formData.courseId}
+              onChange={(e) => setFormData({ ...formData, courseId: Number(e.target.value) })}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+            >
+              <option value={0} disabled>Chọn khóa học</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-sm font-medium mb-2">Học kỳ *</label>
             <select
               value={formData.semester}
@@ -253,7 +290,7 @@ export function Classes() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveCreate}
-              disabled={!formData.name || loading}
+              disabled={!formData.name || !formData.courseId || loading}
               className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -271,4 +308,3 @@ export function Classes() {
     </div>
   );
 }
-

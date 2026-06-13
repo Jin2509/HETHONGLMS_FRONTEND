@@ -5,6 +5,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import { canGradeSubmissions } from "../../../utils/permissions";
 import { toast } from "sonner";
 import { useExam } from "../hooks/useExam";
+import { downloadExamSubmissionFile, type ExamSubmission } from "../../../../service/exam.service";
 
 export function ExamSubmissions() {
   const { id } = useParams();
@@ -47,6 +48,16 @@ export function ExamSubmissions() {
     }
 
     if (!id) return;
+    const invalidSubmission = submissions.find((submission) => {
+      const grade = grades[submission.id];
+      return grade !== null && grade !== undefined && (Number.isNaN(grade) || grade < 0 || grade > examDetail.totalPoints);
+    });
+    if (invalidSubmission) {
+      toast.error("Điểm không hợp lệ", {
+        description: `Điểm phải nằm trong khoảng 0-${examDetail.totalPoints}`,
+      });
+      return;
+    }
 
     try {
       const examId = parseInt(id);
@@ -61,6 +72,15 @@ export function ExamSubmissions() {
       fetchSubmissions(examId); // Refresh data
     } catch (error) {
       toast.error("Không thể lưu điểm. Vui lòng thử lại.");
+    }
+  };
+
+  const handleDownloadSubmission = async (submission: ExamSubmission) => {
+    if (!id) return;
+    try {
+      await downloadExamSubmissionFile(parseInt(id), submission);
+    } catch {
+      toast.error("Không thể tải file bài làm");
     }
   };
 
@@ -219,15 +239,13 @@ export function ExamSubmissions() {
                     </td>
                     <td className="px-6 py-4">
                       {submission.fileUrl ? (
-                        <a 
-                          href={submission.fileUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
+                        <button
+                          onClick={() => handleDownloadSubmission(submission)}
                           className="flex items-center gap-2 text-primary hover:underline"
                         >
                           <Download className="w-4 h-4" />
-                          <span className="text-sm">Xem file</span>
-                        </a>
+                          <span className="text-sm">Tải file</span>
+                        </button>
                       ) : (
                         <span className="text-sm text-muted-foreground">Trắc nghiệm</span>
                       )}
@@ -241,7 +259,7 @@ export function ExamSubmissions() {
                           step="0.5"
                           value={grades[submission.id] ?? ""}
                           onChange={(e) =>
-                            setGrades({ ...grades, [submission.id]: parseFloat(e.target.value) ?? null })
+                            setGrades({ ...grades, [submission.id]: e.target.value === "" ? null : Number(e.target.value) })
                           }
                           className="w-20 px-3 py-1.5 border border-input rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                           placeholder={`0-${examDetail.totalPoints}`}

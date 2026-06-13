@@ -23,7 +23,7 @@ export function CourseDetail() {
   const courseId = Number(id);
   const { user } = useAuth();
   const userRole = user?.role || "student";
-  const { courseDetail, loading, fetchCourseDetail, handleCreateChapter, handleUploadMaterial, handleDeleteMaterial } = useCourses();
+  const { courseDetail, loading, fetchCourseDetail, handleCreateChapter, handleUploadMaterial, handleDeleteMaterial, handleDownloadMaterial } = useCourses();
   
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -201,6 +201,7 @@ export function CourseDetail() {
 
                         <div className="flex items-center gap-2">
                           <button 
+                            onClick={() => handleDownloadMaterial(courseId, material)}
                             className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
                             title="Tải về"
                           >

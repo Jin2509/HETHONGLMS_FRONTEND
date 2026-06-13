@@ -1,11 +1,21 @@
 import { Calendar, Clock, FileText, Download } from "lucide-react";
 import type { AssignmentDetail } from "../types/assignment.types";
+import { downloadAssignmentAttachment } from "../../../../service/assignment.service";
+import { toast } from "sonner";
 
 interface AssignmentInfoProps {
   assignment: AssignmentDetail;
 }
 
 export function AssignmentInfo({ assignment }: AssignmentInfoProps) {
+  const handleDownload = async (attachment: AssignmentDetail["attachments"][number]) => {
+    try {
+      await downloadAssignmentAttachment(assignment.id, attachment);
+    } catch {
+      toast.error("Không thể tải tài liệu đính kèm");
+    }
+  };
+
   return (
     <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
       <h1 className="text-2xl font-bold mb-4">{assignment.name}</h1>
@@ -46,7 +56,11 @@ export function AssignmentInfo({ assignment }: AssignmentInfoProps) {
                   <p className="font-medium text-sm">{attachment.name}</p>
                   <p className="text-xs text-muted-foreground">{attachment.size}</p>
                 </div>
-                <button className="ml-4 p-2 hover:bg-white rounded transition-colors">
+                <button
+                  onClick={() => handleDownload(attachment)}
+                  className="ml-4 p-2 hover:bg-white rounded transition-colors"
+                  title="Tải tài liệu"
+                >
                   <Download className="w-4 h-4" />
                 </button>
               </div>

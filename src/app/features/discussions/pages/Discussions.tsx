@@ -1,9 +1,19 @@
 import { useState, useEffect } from "react";
-import { Search, MessageSquare, ThumbsUp, Plus, Pencil, Trash2, Loader2, User } from "lucide-react";
+import {
+  Search,
+  MessageSquare,
+  ThumbsUp,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  User,
+} from "lucide-react";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { useDiscussion } from "../hooks/useDiscussion";
 import { useAuth } from "../../../contexts/AuthContext";
+import { useCourses } from "../../courses/hooks/useCourses";
 
 export function Discussions() {
   const { user } = useAuth();
@@ -20,7 +30,9 @@ export function Discussions() {
     removeDiscussion,
     addReply,
     toggleLikeDiscussion,
+    toggleLikeReply,
   } = useDiscussion();
+  const { courses, fetchCourses } = useCourses();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -29,7 +41,7 @@ export function Discussions() {
   const [selectedThread, setSelectedThread] = useState<any>(null);
   const [formData, setFormData] = useState({
     title: "",
-    courseId: 1, // MOCK default courseId
+    courseId: 0,
     content: "",
   });
   const [replyContent, setReplyContent] = useState("");
@@ -37,6 +49,10 @@ export function Discussions() {
   useEffect(() => {
     fetchDiscussions({ filter, query: searchQuery });
   }, [fetchDiscussions, filter, searchQuery]);
+
+  useEffect(() => {
+    fetchCourses();
+  }, [fetchCourses]);
 
   useEffect(() => {
     if (discussions.length > 0 && !selectedThread) {
@@ -51,7 +67,7 @@ export function Discussions() {
   }, [selectedThread?.id, fetchDiscussionDetail]);
 
   const handleCreate = () => {
-    setFormData({ title: "", courseId: 1, content: "" });
+    setFormData({ title: "", courseId: courses[0]?.id || 0, content: "" });
     setShowCreateModal(true);
   };
 
@@ -65,7 +81,7 @@ export function Discussions() {
     setSelectedThread(thread);
     setFormData({
       title: thread.title,
-      courseId: thread.courseId || 1,
+      courseId: thread.courseId || 0,
       content: thread.content || "",
     });
     setShowEditModal(true);
@@ -78,6 +94,10 @@ export function Discussions() {
   };
 
   const handleSaveCreate = async () => {
+    if (!formData.title.trim() || !formData.content.trim() || !formData.courseId) {
+      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+      return;
+    }
     try {
       await createNewDiscussion(formData);
       setShowCreateModal(false);
@@ -89,6 +109,10 @@ export function Discussions() {
 
   const handleSaveEdit = async () => {
     if (!selectedThread) return;
+    if (!formData.title.trim() || !formData.courseId) {
+      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+      return;
+    }
     try {
       await updateExistingDiscussion(selectedThread.id, formData);
       setShowEditModal(false);
@@ -114,7 +138,19 @@ export function Discussions() {
     if (!selectedThread) return;
     try {
       await addReply(selectedThread.id, { content: replyContent });
+
+      // Đồng bộ ngay số lượng phản hồi trên header chi tiết đang xem
+      setSelectedThread((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              repliesCount: (prev.repliesCount || 0) + 1,
+            }
+          : null,
+      );
+
       setShowReplyModal(false);
+      setReplyContent(""); // Đưa input về chuỗi rỗng sau khi gửi thành công
       toast.success("Gửi phản hồi thành công");
     } catch (error) {
       toast.error("Không thể gửi phản hồi");
@@ -124,7 +160,11 @@ export function Discussions() {
   const handleLike = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     await toggleLikeDiscussion(id);
-    // Real implementation would refresh or update local state
+  };
+
+  const handleLikeReply = async (replyId: number) => {
+    if (!selectedThread?.id) return;
+    await toggleLikeReply(selectedThread.id, replyId);
   };
 
   return (
@@ -132,7 +172,9 @@ export function Discussions() {
       <div className="mb-8 flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">Thảo luận</h1>
-          <p className="text-muted-foreground">Trao đổi và học hỏi cùng cộng đồng</p>
+          <p className="text-muted-foreground">
+            Trao đổi và học hỏi cùng cộng đồng
+          </p>
         </div>
         <button
           onClick={handleCreate}
@@ -167,7 +209,11 @@ export function Discussions() {
                     : "bg-card border border-input hover:bg-slate-50"
                 }`}
               >
-                {f === "all" ? "Tất cả" : f === "unread" ? "Chưa đọc" : "Của tôi"}
+                {f === "all"
+                  ? "Tất cả"
+                  : f === "unread"
+                    ? "Chưa đọc"
+                    : "Của tôi"}
               </button>
             ))}
           </div>
@@ -196,7 +242,9 @@ export function Discussions() {
                         <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium mb-1 line-clamp-2">{thread.title}</h3>
+                        <h3 className="font-medium mb-1 line-clamp-2">
+                          {thread.title}
+                        </h3>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <span className="px-2 py-0.5 bg-primary/10 text-primary rounded">
                             {thread.courseName || "Khóa học"}
@@ -208,7 +256,7 @@ export function Discussions() {
                             <MessageSquare className="w-3 h-3" />
                             {thread.repliesCount}
                           </span>
-                          <span 
+                          <span
                             className="flex items-center gap-1 hover:text-primary transition-colors"
                             onClick={(e) => handleLike(e, thread.id)}
                           >
@@ -248,7 +296,9 @@ export function Discussions() {
             <div className="bg-card border border-border rounded-xl p-6">
               <div className="flex items-start justify-between mb-6">
                 <div>
-                  <h2 className="text-2xl font-bold mb-2">{selectedThread.title}</h2>
+                  <h2 className="text-2xl font-bold mb-2">
+                    {selectedThread.title}
+                  </h2>
                   <div className="flex items-center gap-3 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <User className="w-4 h-4" />
@@ -261,7 +311,7 @@ export function Discussions() {
                     </span>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={handleReply}
                   className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90"
                 >
@@ -277,37 +327,59 @@ export function Discussions() {
               </div>
 
               <div className="border-t border-border pt-6">
-                <h3 className="font-semibold mb-4">{discussionDetail?.repliesCount || 0} trả lời</h3>
+                <h3 className="font-semibold mb-4">
+                  {discussionDetail?.repliesCount || 0} trả lời
+                </h3>
                 <div className="space-y-4">
-                  {discussionDetail?.replies.map((reply) => (
-                    <div key={reply.id} className="p-4 bg-slate-50 rounded-lg">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold">
-                            {(reply.authorName || "U").charAt(0)}
+                  {loading && !discussionDetail ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                    </div>
+                  ) : (
+                    <>
+                      {(discussionDetail?.replies ?? []).map((reply) => (
+                        <div
+                          key={reply.id}
+                          className="p-4 bg-slate-50 rounded-lg"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-bold">
+                                {(reply?.authorName || "U").charAt(0)}
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {reply?.authorName}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {reply?.authorRole || "Thành viên"}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {reply?.time}
+                            </span>
                           </div>
-                          <div>
-                            <p className="font-medium text-sm">{reply.authorName}</p>
-                            <p className="text-xs text-muted-foreground">{reply.authorRole || "Thành viên"}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {reply?.content}
+                          </p>
+                          <div className="flex items-center gap-4 mt-3">
+                            <button
+                              onClick={() => handleLikeReply(reply.id)}
+                              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                            >
+                              <ThumbsUp className="w-3 h-3" />
+                              <span>{reply?.likesCount || 0}</span>
+                            </button>
                           </div>
                         </div>
-                        <span className="text-xs text-muted-foreground">{reply.time}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {reply.content}
-                      </p>
-                      <div className="flex items-center gap-4 mt-3">
-                        <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors">
-                          <ThumbsUp className="w-3 h-3" />
-                          <span>{reply.likesCount}</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {discussionDetail?.replies.length === 0 && (
-                    <div className="py-8 text-center text-muted-foreground italic">
-                      Chưa có phản hồi nào cho thảo luận này.
-                    </div>
+                      ))}
+                      {(discussionDetail?.replies ?? []).length === 0 && (
+                        <div className="py-8 text-center text-muted-foreground italic">
+                          Chưa có phản hồi nào cho thảo luận này.
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -315,7 +387,9 @@ export function Discussions() {
           ) : (
             <div className="bg-card border border-border rounded-xl p-12 text-center h-full flex flex-col items-center justify-center">
               <MessageSquare className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-muted-foreground">Chọn một thảo luận để xem chi tiết</p>
+              <p className="text-muted-foreground">
+                Chọn một thảo luận để xem chi tiết
+              </p>
             </div>
           )}
         </div>
@@ -333,26 +407,35 @@ export function Discussions() {
             <input
               type="text"
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
               className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               placeholder="Nhập tiêu đề thảo luận"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">ID Môn học *</label>
-            <input
-              type="number"
+            <label className="block text-sm font-medium mb-2">Môn học *</label>
+            <select
               value={formData.courseId}
-              onChange={(e) => setFormData({ ...formData, courseId: parseInt(e.target.value) || 1 })}
-              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Nhập ID môn học"
-            />
+              onChange={(e) => setFormData({ ...formData, courseId: Number(e.target.value) })}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+            >
+              <option value={0} disabled>Chọn môn học</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">Nội dung *</label>
             <textarea
               value={formData.content}
-              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, content: e.target.value })
+              }
               className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               rows={6}
               placeholder="Nhập nội dung thảo luận của bạn..."
@@ -389,24 +472,34 @@ export function Discussions() {
             <input
               type="text"
               value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, title: e.target.value })
+              }
               className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">ID Môn học *</label>
-            <input
-              type="number"
+            <label className="block text-sm font-medium mb-2">Môn học *</label>
+            <select
               value={formData.courseId}
-              onChange={(e) => setFormData({ ...formData, courseId: parseInt(e.target.value) || 1 })}
-              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+              onChange={(e) => setFormData({ ...formData, courseId: Number(e.target.value) })}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+            >
+              <option value={0} disabled>Chọn môn học</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">Nội dung</label>
             <textarea
               value={formData.content}
-              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, content: e.target.value })
+              }
               className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
               rows={6}
               placeholder="Cập nhật nội dung thảo luận..."
@@ -439,8 +532,9 @@ export function Discussions() {
       >
         <div className="space-y-4">
           <p className="text-muted-foreground">
-            Bạn có chắc chắn muốn xóa thảo luận <strong>{selectedThread?.title}</strong>?
-            Hành động này sẽ xóa toàn bộ thảo luận và tất cả các trả lời.
+            Bạn có chắc chắn muốn xóa thảo luận{" "}
+            <strong>{selectedThread?.title}</strong>? Hành động này sẽ xóa toàn
+            bộ thảo luận và tất cả các trả lời.
           </p>
           <div className="flex gap-3 pt-4">
             <button
@@ -470,10 +564,14 @@ export function Discussions() {
         <div className="space-y-4">
           <div className="p-4 bg-slate-50 rounded-lg border border-border">
             <h4 className="text-sm font-semibold mb-1">Đang trả lời:</h4>
-            <p className="text-sm text-muted-foreground line-clamp-2">{selectedThread?.title}</p>
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              {selectedThread?.title}
+            </p>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-2">Nội dung câu trả lời *</label>
+            <label className="block text-sm font-medium mb-2">
+              Nội dung câu trả lời *
+            </label>
             <textarea
               value={replyContent}
               onChange={(e) => setReplyContent(e.target.value)}

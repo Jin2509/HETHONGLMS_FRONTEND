@@ -36,6 +36,7 @@ export interface Submission {
   studentId: string;
   submittedAt: string;
   file: string;
+  fileUrl?: string;
   grade: number | null;
   feedback: string;
   status: string;
@@ -44,6 +45,7 @@ export interface Submission {
 export interface AssignmentFormData {
   name: string;
   course: string;
+  courseId: number;
   dueDate: string;
   dueTime: string;
   description: string;

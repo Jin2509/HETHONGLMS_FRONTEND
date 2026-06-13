@@ -3,10 +3,12 @@ import { Link } from "react-router";
 import { Calendar, Clock, FileCheck, Eye, Play, Plus, Pencil, Trash2, Upload, FileText, X, ClipboardCheck, Search, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
-import { getVietnamDateInputValue, getVietnamTimeInputValue } from "../../../utils/datetime";
+import { getVietnamDateInputValue } from "../../../utils/datetime";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canManageContent, canViewAllSubmissions } from "../../../utils/permissions";
+import { canManageContent } from "../../../utils/permissions";
 import { useExam } from "../hooks/useExam";
+import { useCourses } from "../../courses/hooks/useCourses";
+import { downloadExamAttachment, type ExamAttachment } from "../../../../service/exam.service";
 
 export function ExamsList() {
   const { user } = useAuth();
@@ -19,6 +21,7 @@ export function ExamsList() {
     updateExam, 
     deleteExam 
   } = useExam();
+  const { courses, fetchCourses } = useCourses();
 
   const [activeTab, setActiveTab] = useState<"all" | "pending" | "finished">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -29,6 +32,7 @@ export function ExamsList() {
   const [formData, setFormData] = useState({
     name: "",
     course: "",
+    courseId: 0,
     date: "",
     startTime: "",
     duration: 60,
@@ -39,7 +43,18 @@ export function ExamsList() {
 
   useEffect(() => {
     fetchExams();
-  }, [fetchExams]);
+    fetchCourses();
+  }, [fetchExams, fetchCourses]);
+
+  const buildExamPayload = () => ({
+    name: formData.name.trim(),
+    courseId: formData.courseId,
+    description: formData.description.trim(),
+    date: `${formData.date}T${formData.startTime}:00`,
+    duration: formData.duration,
+    totalPoints: formData.totalPoints,
+    attachments: formData.attachments,
+  });
 
   const filteredExams = exams.filter((exam) => {
     // Search filter
@@ -75,7 +90,8 @@ export function ExamsList() {
   const handleCreate = () => {
     setFormData({
       name: "",
-      course: "",
+      course: courses[0]?.name || "",
+      courseId: courses[0]?.id || 0,
       date: getVietnamDateInputValue(),
       startTime: "08:00",
       duration: 60,
@@ -91,12 +107,13 @@ export function ExamsList() {
     setSelectedExam(exam);
     setFormData({
       name: exam.name,
-      course: exam.course,
-      date: exam.date,
-      startTime: "08:00",
+      course: exam.courseName || exam.course || "",
+      courseId: exam.courseId || courses.find((course) => course.name === exam.courseName || course.name === exam.course)?.id || 0,
+      date: exam.date ? exam.date.slice(0, 10) : getVietnamDateInputValue(),
+      startTime: exam.date?.includes("T") ? exam.date.slice(11, 16) : "08:00",
       duration: exam.duration,
-      description: "",
-      totalPoints: 10,
+      description: exam.description || "",
+      totalPoints: exam.totalPoints || 10,
       attachments: [],
     });
     setShowEditModal(true);
@@ -120,29 +137,68 @@ export function ExamsList() {
     setShowDeleteModal(true);
   };
 
-  const handleSaveCreate = () => {
-    // TODO: Gọi API tạo bài kiểm tra
-    setShowCreateModal(false);
-    toast.success("Tạo bài kiểm tra thành công", {
-      description: `Bài kiểm tra "${formData.name}" đã được thêm vào khóa học`,
-    });
+  const handleSaveCreate = async () => {
+    if (!formData.name.trim() || !formData.courseId || !formData.date || !formData.startTime) {
+      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+      return;
+    }
+    if (Number.isNaN(formData.duration) || formData.duration < 15 || Number.isNaN(formData.totalPoints) || formData.totalPoints <= 0) {
+      toast.error("Thời lượng hoặc tổng điểm không hợp lệ");
+      return;
+    }
+    try {
+      await createExam(buildExamPayload());
+      setShowCreateModal(false);
+      toast.success("Tạo bài kiểm tra thành công", {
+        description: `Bài kiểm tra "${formData.name}" đã được thêm vào khóa học`,
+      });
+      fetchExams();
+    } catch {
+      toast.error("Không thể tạo bài kiểm tra");
+    }
   };
 
-  const handleSaveEdit = () => {
-    // TODO: Gọi API cập nhật bài kiểm tra
-    setShowEditModal(false);
-    toast.success("Cập nhật thành công", {
-      description: "Thông tin bài kiểm tra đã được lưu",
-    });
+  const handleSaveEdit = async () => {
+    if (!selectedExam) return;
+    if (!formData.name.trim() || !formData.courseId || !formData.date || !formData.startTime) {
+      toast.error("Vui lòng điền đầy đủ thông tin bắt buộc");
+      return;
+    }
+    try {
+      await updateExam(selectedExam.id, buildExamPayload());
+      setShowEditModal(false);
+      toast.success("Cập nhật thành công", {
+        description: "Thông tin bài kiểm tra đã được lưu",
+      });
+      fetchExams();
+    } catch {
+      toast.error("Không thể cập nhật bài kiểm tra");
+    }
   };
 
-  const handleConfirmDelete = () => {
-    // TODO: Gọi API xóa bài kiểm tra
+  const handleConfirmDelete = async () => {
+    if (!selectedExam) return;
     const examName = selectedExam?.name;
-    setShowDeleteModal(false);
-    toast.success("Xóa thành công", {
-      description: `Bài kiểm tra "${examName}" đã được xóa`,
-    });
+    try {
+      await deleteExam(selectedExam.id);
+      setShowDeleteModal(false);
+      toast.success("Xóa thành công", {
+        description: `Bài kiểm tra "${examName}" đã được xóa`,
+      });
+      fetchExams();
+    } catch {
+      toast.error("Không thể xóa bài kiểm tra");
+    }
+  };
+
+  const handleDownloadAttachment = async (examId: number, attachment: ExamAttachment, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await downloadExamAttachment(examId, attachment);
+    } catch {
+      toast.error("Không thể tải file đề thi");
+    }
   };
 
   return (
@@ -263,6 +319,21 @@ export function ExamsList() {
                   {getStatusLabel(exam.status)}
                 </span>
               </div>
+              {exam.attachments && exam.attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {exam.attachments.map((attachment) => (
+                    <button
+                      key={attachment.id}
+                      onClick={(e) => handleDownloadAttachment(exam.id, attachment, e)}
+                      className="inline-flex items-center gap-1.5 rounded border border-border bg-slate-50 px-2 py-1 text-xs text-primary hover:bg-primary/10"
+                      title="Tải file đề thi"
+                    >
+                      <Download className="w-3 h-3" />
+                      <span className="max-w-[160px] truncate">{attachment.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex gap-2">
@@ -323,13 +394,22 @@ export function ExamsList() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">Môn học *</label>
-            <input
-              type="text"
-              value={formData.course}
-              onChange={(e) => setFormData({ ...formData, course: e.target.value })}
-              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Nhập tên môn học"
-            />
+            <select
+              value={formData.courseId || ""}
+              onChange={(e) => {
+                const courseId = Number(e.target.value);
+                const course = courses.find((item) => item.id === courseId);
+                setFormData({ ...formData, courseId, course: course?.name || "" });
+              }}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+            >
+              <option value="" disabled>Chọn môn học</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -424,7 +504,8 @@ export function ExamsList() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveCreate}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              disabled={loading || !formData.name.trim() || !formData.courseId || !formData.date || !formData.startTime}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Tạo bài kiểm tra
             </button>
@@ -456,12 +537,22 @@ export function ExamsList() {
           </div>
           <div>
             <label className="block text-sm font-medium mb-2">Môn học *</label>
-            <input
-              type="text"
-              value={formData.course}
-              onChange={(e) => setFormData({ ...formData, course: e.target.value })}
-              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-            />
+            <select
+              value={formData.courseId || ""}
+              onChange={(e) => {
+                const courseId = Number(e.target.value);
+                const course = courses.find((item) => item.id === courseId);
+                setFormData({ ...formData, courseId, course: course?.name || "" });
+              }}
+              className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+            >
+              <option value="" disabled>Chọn môn học</option>
+              {courses.map((course) => (
+                <option key={course.id} value={course.id}>
+                  {course.name}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -556,7 +647,8 @@ export function ExamsList() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={handleSaveEdit}
-              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+              disabled={loading || !formData.name.trim() || !formData.courseId || !formData.date || !formData.startTime}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Lưu thay đổi
             </button>

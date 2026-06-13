@@ -2,12 +2,18 @@ import { useState, useCallback } from "react";
 import { 
   getCourses, 
   getCourseDetail, 
+  createCourse,
+  updateCourse,
+  deleteCourse,
   createChapter, 
   uploadMaterial, 
   deleteMaterial,
+  downloadMaterial,
   type Course,
   type CourseChapter,
-  type CourseMaterial 
+  type CourseMaterial,
+  type CreateCourseData,
+  type UpdateCourseData 
 } from "../../../../service/course.service";
 import { toast } from "sonner";
 
@@ -41,6 +47,59 @@ export function useCourses() {
       setLoading(false);
     }
   }, []);
+
+  const handleCreateCourse = async (data: CreateCourseData) => {
+    setLoading(true);
+    try {
+      const newCourse = await createCourse(data);
+      toast.success("Tạo khóa học thành công");
+      fetchCourses();
+      return newCourse;
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Không thể tạo khóa học";
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateCourse = async (id: number, data: UpdateCourseData) => {
+    setLoading(true);
+    try {
+      const updatedCourse = await updateCourse(id, data);
+      toast.success("Cập nhật khóa học thành công");
+      setCourses(prev => prev.map(c => c.id === id ? updatedCourse : c));
+      if (courseDetail?.id === id) {
+        setCourseDetail(updatedCourse);
+      }
+      return updatedCourse;
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Không thể cập nhật khóa học";
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCourse = async (id: number) => {
+    setLoading(true);
+    try {
+      await deleteCourse(id);
+      toast.success("Xóa khóa học thành công");
+      setCourses(prev => prev.filter(c => c.id !== id));
+      if (courseDetail?.id === id) {
+        setCourseDetail(null);
+      }
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Không thể xóa khóa học";
+      toast.error(message);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateChapter = async (courseId: number, name: string) => {
     try {
@@ -80,14 +139,27 @@ export function useCourses() {
     }
   };
 
+  const handleDownloadMaterial = async (courseId: number, material: CourseMaterial) => {
+    try {
+      await downloadMaterial(courseId, material);
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Không thể tải tài liệu";
+      toast.error(message);
+    }
+  };
+
   return {
     loading,
     courses,
     courseDetail,
     fetchCourses,
     fetchCourseDetail,
+    handleCreateCourse,
+    handleUpdateCourse,
+    handleDeleteCourse,
     handleCreateChapter,
     handleUploadMaterial,
     handleDeleteMaterial,
+    handleDownloadMaterial,
   };
 }

@@ -8,8 +8,12 @@ const apiClient = axios.create({
   },
 });
 
+// Request interceptor for logging
 apiClient.interceptors.request.use(
   (config) => {
+    if (import.meta.env.DEV) {
+      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+    }
     const token = localStorage.getItem("lms_token");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -17,15 +21,21 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error("[API Request Error]", error);
     return Promise.reject(error);
   }
 );
 
+// Response interceptor for logging
 apiClient.interceptors.response.use(
   (response) => {
+    if (import.meta.env.DEV) {
+      console.log(`[API Response] ${response.status}`, response.data);
+    }
     return response;
   },
   (error) => {
+    console.error(`[API Response Error]`, error);
     if (error.response) {
       const { status, data } = error.response;
       const message = data?.message || data?.error || "Đã có lỗi xảy ra";

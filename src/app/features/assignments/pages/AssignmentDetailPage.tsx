@@ -51,7 +51,7 @@ export function AssignmentDetailPage() {
           <div className="lg:col-span-2">
             <AssignmentInfo assignment={assignmentDetail} />
           </div>
-          <StudentSubmissionPanel assignmentId={id || ""} />
+          <StudentSubmissionPanel assignmentId={id || ""} submissions={submissions} />
         </div>
       ) : (
         /* Teacher/Admin View */

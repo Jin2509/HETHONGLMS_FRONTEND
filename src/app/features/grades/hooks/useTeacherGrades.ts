@@ -29,12 +29,7 @@ export function useTeacherGrades(classId: number) {
     try {
       await updateGrade(classId, data);
       toast.success("Cập nhật điểm thành công");
-      // Update local state to avoid full re-fetch
-      setGrades(prev => prev.map(g => 
-        g.courseId === data.studentId // Assuming courseId in CourseGrade is studentId when used in class context
-        ? { ...g, ...data }
-        : g
-      ));
+      fetchClassGrades();
     } catch (error: any) {
       const message = error.response?.data?.message || "Không thể cập nhật điểm";
       toast.error(message);

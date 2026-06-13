@@ -1,48 +1,173 @@
 import apiClient from "../api/client";
+import { downloadFile } from "../api/download";
 import { ENDPOINTS } from "../api/endpoints";
 import type { 
   Assignment, 
+  AssignmentAttachment,
   AssignmentDetail, 
   Submission, 
   AssignmentStats, 
   AssignmentFormData 
 } from "../app/features/assignments/types/assignment.types";
 
+export interface ApiResponse<T> {
+  message: string;
+  data: T;
+}
+
+type RawAssignment = Partial<AssignmentDetail> & {
+  courseName?: string;
+  title?: string;
+  totalScore?: number;
+};
+
+type RawSubmission = Partial<Submission> & {
+  studentCode?: string;
+  fileName?: string;
+  originalFileName?: string;
+  attachmentName?: string;
+  score?: number | null;
+};
+
+function toApiDueDate(data: Partial<AssignmentFormData>): string | undefined {
+  if (!data.dueDate) return undefined;
+  return data.dueTime ? `${data.dueDate}T${data.dueTime}:00` : data.dueDate;
+}
+
+function getHoursLeft(dueDate?: string): number {
+  if (!dueDate) return 0;
+  const dueTime = new Date(dueDate).getTime();
+  if (Number.isNaN(dueTime)) return 0;
+  return Math.max(0, Math.ceil((dueTime - Date.now()) / 36e5));
+}
+
+function getAssignmentStatus(dueDate?: string): string {
+  return getHoursLeft(dueDate) > 0 ? "Chưa nộp" : "Quá hạn";
+}
+
+function normalizeAttachment(attachment: Partial<AssignmentAttachment> & {
+  fileName?: string;
+  originalFileName?: string;
+  fileSize?: number | string;
+  fileUrl?: string;
+}): AssignmentAttachment {
+  const size = attachment.size ?? attachment.fileSize;
+  return {
+    id: Number(attachment.id),
+    name: attachment.name || attachment.fileName || attachment.originalFileName || "Tệp đính kèm",
+    size: size === undefined ? "" : String(size),
+    url: attachment.url || attachment.fileUrl || "",
+  };
+}
+
+function normalizeAssignment(raw: RawAssignment): AssignmentDetail {
+  const dueDate = raw.dueDate || "";
+  const courseId = raw.courseId || 0;
+  return {
+    id: Number(raw.id),
+    name: raw.name || raw.title || "",
+    course: raw.course || raw.courseName || (courseId ? `Khóa học #${courseId}` : ""),
+    courseId,
+    dueDate,
+    hoursLeft: raw.hoursLeft ?? getHoursLeft(dueDate),
+    description: raw.description || "",
+    requirements: raw.requirements || [],
+    attachments: (raw.attachments || []).map(normalizeAttachment),
+    maxScore: raw.maxScore ?? raw.totalScore ?? 10,
+  };
+}
+
+function normalizeSubmission(raw: RawSubmission): Submission {
+  return {
+    id: Number(raw.id),
+    studentName: raw.studentName || "",
+    studentId: String(raw.studentId || raw.studentCode || ""),
+    submittedAt: raw.submittedAt || "",
+    file: raw.file || raw.fileName || raw.originalFileName || raw.attachmentName || "",
+    fileUrl: raw.fileUrl,
+    grade: raw.grade ?? raw.score ?? null,
+    feedback: raw.feedback || "",
+    status: raw.status || (raw.grade === null || raw.grade === undefined ? "submitted" : "graded"),
+  };
+}
+
+function buildAssignmentPayload(data: Partial<AssignmentFormData> & { courseId?: number }) {
+  return {
+    courseId: data.courseId,
+    name: data.name,
+    description: data.description,
+    dueDate: toApiDueDate(data),
+    maxScore: data.maxScore,
+  };
+}
+
+async function uploadAssignmentAttachments(assignmentId: number, attachments?: File[]): Promise<void> {
+  if (!attachments?.length) return;
+
+  await Promise.all(
+    attachments.map((file) => {
+      const formData = new FormData();
+      formData.append("assignmentId", String(assignmentId));
+      formData.append("file", file);
+      return apiClient.post(ENDPOINTS.ASSIGNMENT_ATTACHMENTS.CREATE, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+    })
+  );
+}
+
 export async function getAssignments(params?: {
   status?: string;
   courseId?: number;
 }): Promise<Assignment[]> {
-  const response = await apiClient.get<Assignment[]>(ENDPOINTS.ASSIGNMENTS.LIST, { params });
-  return response.data;
+  const response = await apiClient.get<ApiResponse<RawAssignment[]>>(ENDPOINTS.ASSIGNMENTS.LIST, { params });
+  return response.data.data.map((assignment) => {
+    const normalized = normalizeAssignment(assignment);
+    return {
+      ...normalized,
+      status: assignment.status || getAssignmentStatus(normalized.dueDate),
+    };
+  });
 }
 
 export async function getAssignmentDetail(id: number): Promise<AssignmentDetail> {
-  const response = await apiClient.get<AssignmentDetail>(ENDPOINTS.ASSIGNMENTS.DETAIL(id));
-  return response.data;
+  const [assignmentResponse, attachmentsResponse] = await Promise.all([
+    apiClient.get<ApiResponse<RawAssignment>>(ENDPOINTS.ASSIGNMENTS.DETAIL(id)),
+    apiClient.get<ApiResponse<AssignmentAttachment[]>>(ENDPOINTS.ASSIGNMENT_ATTACHMENTS.BY_ASSIGNMENT(id)),
+  ]);
+  return normalizeAssignment({
+    ...assignmentResponse.data.data,
+    attachments: attachmentsResponse.data.data,
+  });
 }
 
 export async function createAssignment(data: AssignmentFormData & { courseId: number }): Promise<Assignment> {
-  const formData = new FormData();
-  formData.append("courseId", String(data.courseId));
-  formData.append("name", data.name);
-  if (data.description) formData.append("description", data.description);
-  formData.append("dueDate", `${data.dueDate}T${data.dueTime}:00`);
-  formData.append("maxScore", String(data.maxScore));
-  if (data.attachments) {
-    data.attachments.forEach((file) => formData.append("attachments", file));
-  }
-  const response = await apiClient.post<Assignment>(ENDPOINTS.ASSIGNMENTS.CREATE, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
-  return response.data;
+  const response = await apiClient.post<ApiResponse<RawAssignment>>(
+    ENDPOINTS.ASSIGNMENTS.CREATE,
+    buildAssignmentPayload(data)
+  );
+  const assignment = normalizeAssignment(response.data.data);
+  await uploadAssignmentAttachments(assignment.id, data.attachments);
+  return {
+    ...assignment,
+    status: getAssignmentStatus(assignment.dueDate),
+  };
 }
 
 export async function updateAssignment(
   id: number,
   data: Partial<AssignmentFormData>
 ): Promise<Assignment> {
-  const response = await apiClient.patch<Assignment>(ENDPOINTS.ASSIGNMENTS.UPDATE(id), data);
-  return response.data;
+  const response = await apiClient.put<ApiResponse<RawAssignment>>(
+    ENDPOINTS.ASSIGNMENTS.UPDATE(id),
+    buildAssignmentPayload(data)
+  );
+  const assignment = normalizeAssignment(response.data.data);
+  await uploadAssignmentAttachments(assignment.id, data.attachments);
+  return {
+    ...assignment,
+    status: getAssignmentStatus(assignment.dueDate),
+  };
 }
 
 export async function deleteAssignment(id: number): Promise<void> {
@@ -50,34 +175,50 @@ export async function deleteAssignment(id: number): Promise<void> {
 }
 
 export async function getSubmissions(assignmentId: number): Promise<Submission[]> {
-  const response = await apiClient.get<Submission[]>(
-    ENDPOINTS.ASSIGNMENTS.SUBMISSIONS(assignmentId)
+  const response = await apiClient.get<ApiResponse<RawSubmission[]>>(
+    ENDPOINTS.SUBMISSIONS.BY_ASSIGNMENT(assignmentId)
   );
-  return response.data;
+  return response.data.data.map(normalizeSubmission);
 }
 
 export async function submitAssignment(
   assignmentId: number,
-  data: { file: File; note?: string }
+  data: { file: File; note?: string; studentId: number }
 ): Promise<void> {
   const formData = new FormData();
+  formData.append("assignmentId", String(assignmentId));
+  formData.append("studentId", String(data.studentId));
   formData.append("file", data.file);
   if (data.note) formData.append("note", data.note);
-  await apiClient.post(ENDPOINTS.ASSIGNMENTS.SUBMIT(assignmentId), formData, {
+  await apiClient.post(ENDPOINTS.SUBMISSIONS.UPLOAD, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
 }
 
 export async function gradeSubmission(
-  assignmentId: number,
+  _assignmentId: number,
   payload: { submissionId: number; grade: number | null; feedback?: string }
 ): Promise<void> {
-  await apiClient.post(ENDPOINTS.ASSIGNMENTS.GRADE(assignmentId), payload);
+  await apiClient.put(ENDPOINTS.SUBMISSIONS.GRADE(payload.submissionId), {
+    grade: payload.grade,
+    feedback: payload.feedback,
+  });
 }
 
 export async function getAssignmentStats(assignmentId: number): Promise<AssignmentStats> {
-  const response = await apiClient.get<AssignmentStats>(
+  const response = await apiClient.get<ApiResponse<AssignmentStats>>(
     `${ENDPOINTS.ASSIGNMENTS.DETAIL(assignmentId)}/stats`
   );
-  return response.data;
+  return response.data.data;
+}
+
+export async function downloadAssignmentAttachment(
+  _assignmentId: number,
+  attachment: AssignmentAttachment
+): Promise<void> {
+  await downloadFile(attachment.url || ENDPOINTS.ASSIGNMENT_ATTACHMENTS.DETAIL(attachment.id), attachment.name);
+}
+
+export async function downloadSubmissionFile(_assignmentId: number, submission: Submission): Promise<void> {
+  await downloadFile(submission.fileUrl || ENDPOINTS.SUBMISSIONS.DETAIL(submission.id), submission.file || `submission-${submission.id}`);
 }

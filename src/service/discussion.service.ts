@@ -36,41 +36,41 @@ export interface CreateReplyData {
   content: string;
 }
 
+export interface ApiResponse<T> {
+  message: string;
+  data: T;
+}
+
 export async function getDiscussions(params?: {
   filter?: string;
   query?: string;
   courseId?: number;
 }): Promise<Discussion[]> {
-  // TODO: connect to real API
-  const response = await apiClient.get<Discussion[]>(ENDPOINTS.DISCUSSIONS.LIST, { params });
-  return response.data;
+  const response = await apiClient.get<ApiResponse<Discussion[]>>(ENDPOINTS.DISCUSSIONS.LIST, { params });
+  return response.data.data;
 }
 
 export async function getDiscussionDetail(
   id: number
 ): Promise<Discussion & { replies: DiscussionReply[] }> {
-  // TODO: connect to real API
-  const response = await apiClient.get(ENDPOINTS.DISCUSSIONS.DETAIL(id));
-  return response.data;
+  const response = await apiClient.get<ApiResponse<Discussion & { replies: DiscussionReply[] }>>(ENDPOINTS.DISCUSSIONS.DETAIL(id));
+  return response.data.data;
 }
 
 export async function createDiscussion(data: CreateDiscussionData): Promise<Discussion> {
-  // TODO: connect to real API
-  const response = await apiClient.post<Discussion>(ENDPOINTS.DISCUSSIONS.CREATE, data);
-  return response.data;
+  const response = await apiClient.post<ApiResponse<Discussion>>(ENDPOINTS.DISCUSSIONS.CREATE, data);
+  return response.data.data;
 }
 
 export async function updateDiscussion(
   id: number,
   data: Partial<CreateDiscussionData>
 ): Promise<Discussion> {
-  // TODO: connect to real API
-  const response = await apiClient.patch<Discussion>(ENDPOINTS.DISCUSSIONS.UPDATE(id), data);
-  return response.data;
+  const response = await apiClient.patch<ApiResponse<Discussion>>(ENDPOINTS.DISCUSSIONS.UPDATE(id), data);
+  return response.data.data;
 }
 
 export async function deleteDiscussion(id: number): Promise<void> {
-  // TODO: connect to real API
   await apiClient.delete(ENDPOINTS.DISCUSSIONS.DELETE(id));
 }
 
@@ -78,20 +78,17 @@ export async function replyToDiscussion(
   discussionId: number,
   data: CreateReplyData
 ): Promise<DiscussionReply> {
-  // TODO: connect to real API
-  const response = await apiClient.post<DiscussionReply>(
+  const response = await apiClient.post<ApiResponse<DiscussionReply>>(
     ENDPOINTS.DISCUSSIONS.REPLIES(discussionId),
     data
   );
-  return response.data;
+  return response.data.data;
 }
 
 export async function likeDiscussion(id: number): Promise<void> {
-  // TODO: connect to real API
   await apiClient.post(ENDPOINTS.DISCUSSIONS.LIKE(id));
 }
 
 export async function likeReply(discussionId: number, replyId: number): Promise<void> {
-  // TODO: connect to real API
   await apiClient.post(`${ENDPOINTS.DISCUSSIONS.REPLIES(discussionId)}/${replyId}/like`);
 }

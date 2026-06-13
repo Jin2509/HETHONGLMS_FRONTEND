@@ -3,30 +3,6 @@ import { useNavigate } from "react-router";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LogIn, User, Lock, Eye, EyeOff } from "lucide-react";
 
-const demoUsers = [
-  {
-    role: "student",
-    email: "student@lms.edu",
-    password: "student123",
-    name: "Nguyễn Văn A",
-    description: "Xem khóa học, làm bài tập, thi và xem điểm",
-  },
-  {
-    role: "teacher",
-    email: "teacher@lms.edu",
-    password: "teacher123",
-    name: "Dr. Trần Thị B",
-    description: "Chấm bài, xem báo cáo, quản lý lớp học",
-  },
-  {
-    role: "admin",
-    email: "admin@lms.edu",
-    password: "admin123",
-    name: "Admin User",
-    description: "Quản lý người dùng và toàn bộ hệ thống",
-  },
-];
-
 export function Login() {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -41,36 +17,14 @@ export function Login() {
     setError("");
     setLoading(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    const user = demoUsers.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    if (user) {
-      login({
-        email: user.email,
-        name: user.name,
-        role: user.role as "student" | "teacher" | "admin",
-      });
+    try {
+      await login(email, password);
       navigate("/");
-    } else {
-      setError("Email hoặc mật khẩu không đúng");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Email hoặc mật khẩu không đúng");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  };
-
-  const handleQuickLogin = (user: typeof demoUsers[0]) => {
-    setEmail(user.email);
-    setPassword(user.password);
-    login({
-      email: user.email,
-      name: user.name,
-      role: user.role as "student" | "teacher" | "admin",
-    });
-    navigate("/");
   };
 
   return (
@@ -88,41 +42,6 @@ export function Login() {
             <p className="text-xl text-muted-foreground">
               Hệ thống quản lý học tập hiện đại cho trường đại học
             </p>
-            {/* <div className="space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-success/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-success text-lg">✓</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">Học tập linh hoạt</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Truy cập khóa học, bài giảng mọi lúc mọi nơi
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-primary text-lg">✓</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">Theo dõi tiến độ</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Quản lý bài tập, lịch thi và điểm số dễ dàng
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-warning/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-warning text-lg">✓</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-1">Cộng đồng học tập</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Trao đổi, thảo luận với giảng viên và bạn bè
-                  </p>
-                </div>
-              </div>
-            </div> */}
           </div>
         </div>
 
@@ -209,60 +128,6 @@ export function Login() {
                 {loading ? "Đang đăng nhập..." : "Đăng nhập"}
               </button>
             </form>
-
-            <div className="mt-8">
-              <div className="relative mb-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border"></div>
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    Hoặc đăng nhập nhanh
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                {demoUsers.map((user) => (
-                  <button
-                    key={user.role}
-                    onClick={() => handleQuickLogin(user)}
-                    className="p-4 border-2 border-border rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          user.role === "admin"
-                            ? "bg-destructive/10 text-destructive"
-                            : user.role === "teacher"
-                            ? "bg-primary/10 text-primary"
-                            : "bg-success/10 text-success"
-                        }`}
-                      >
-                        <User className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold capitalize">
-                            {user.role === "admin"
-                              ? "Quản trị viên"
-                              : user.role === "teacher"
-                              ? "Giảng viên"
-                              : "Sinh viên"}
-                          </span>
-                          <span className="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded">
-                            {user.email}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {user.description}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">

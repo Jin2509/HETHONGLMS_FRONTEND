@@ -1,6 +1,7 @@
 import { Upload, FileText, X } from "lucide-react";
 import { Modal } from "../../../components/shared";
 import type { AssignmentFormData } from "../types/assignment.types";
+import type { Course } from "../../../../service/course.service";
 
 interface AssignmentFormModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface AssignmentFormModalProps {
   onFormDataChange: (data: AssignmentFormData) => void;
   onSubmit: () => void;
   submitLabel: string;
+  courses: Course[];
 }
 
 export function AssignmentFormModal({
@@ -20,6 +22,7 @@ export function AssignmentFormModal({
   onFormDataChange,
   onSubmit,
   submitLabel,
+  courses,
 }: AssignmentFormModalProps) {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -48,13 +51,22 @@ export function AssignmentFormModal({
         </div>
         <div>
           <label className="block text-sm font-medium mb-2">Môn học *</label>
-          <input
-            type="text"
-            value={formData.course}
-            onChange={(e) => onFormDataChange({ ...formData, course: e.target.value })}
-            className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="Nhập tên môn học"
-          />
+          <select
+            value={formData.courseId || ""}
+            onChange={(e) => {
+              const courseId = Number(e.target.value);
+              const course = courses.find((item) => item.id === courseId);
+              onFormDataChange({ ...formData, courseId, course: course?.name || "" });
+            }}
+            className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring bg-background"
+          >
+            <option value="" disabled>Chọn môn học</option>
+            {courses.map((course) => (
+              <option key={course.id} value={course.id}>
+                {course.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -137,7 +149,8 @@ export function AssignmentFormModal({
         <div className="flex gap-3 pt-4">
           <button
             onClick={onSubmit}
-            className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+            disabled={!formData.name.trim() || !formData.courseId || !formData.dueDate || !formData.dueTime || Number.isNaN(formData.maxScore)}
+            className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitLabel}
           </button>
