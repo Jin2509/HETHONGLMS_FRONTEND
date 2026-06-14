@@ -1,5 +1,7 @@
 import apiClient from "../api/client";
 import { ENDPOINTS } from "../api/endpoints";
+import { getUsers } from "./admin.service";
+import { unwrapArray, unwrapData, type ApiResponse } from "./api-response";
 
 export interface Class {
   id: number;
@@ -36,48 +38,50 @@ export interface UpdateClassData {
   semester?: string;
 }
 
-export interface ApiResponse<T> {
-  message: string;
-  data: T;
+function normalizeClass(cls: Partial<Class>): Class {
+  return {
+    id: Number(cls.id || 0),
+    name: cls.name || "",
+    semester: cls.semester || "",
+    instructorId: Number(cls.instructorId || 0),
+    instructorName: cls.instructorName,
+    studentCount: Number(cls.studentCount || 0),
+    courseCount: Number(cls.courseCount || 0),
+    createdAt: cls.createdAt || "",
+  };
 }
 
-function hasData<T>(payload: unknown): payload is ApiResponse<T> {
-  return typeof payload === "object" && payload !== null && "data" in payload;
-}
-
-function unwrapData<T>(payload: T | ApiResponse<T>): T {
-  return hasData<T>(payload) ? payload.data : payload;
-}
-
-function unwrapArray<T>(payload: unknown): T[] {
-  const data = unwrapData<unknown>(payload as unknown);
-  if (Array.isArray(data)) {
-    return data as T[];
-  }
-  if (typeof data === "object" && data !== null && "content" in data && Array.isArray((data as { content?: unknown }).content)) {
-    return (data as { content: T[] }).content;
-  }
-  return [];
+function normalizeClassMember(member: Partial<ClassMember>): ClassMember {
+  return {
+    id: member.id,
+    userId: member.userId,
+    name: member.name || "",
+    email: member.email || "",
+    studentId: member.studentId,
+    phone: member.phone,
+    department: member.department,
+    enrolledAt: member.enrolledAt || "",
+  };
 }
 
 export async function getClasses(): Promise<Class[]> {
   const response = await apiClient.get<unknown>(ENDPOINTS.CLASSES.LIST);
-  return unwrapArray<Class>(response.data);
+  return unwrapArray<Partial<Class>>(response.data).map(normalizeClass);
 }
 
 export async function getClassDetail(id: number): Promise<Class> {
   const response = await apiClient.get<ApiResponse<Class> | Class>(ENDPOINTS.CLASSES.DETAIL(id));
-  return unwrapData<Class>(response.data);
+  return normalizeClass(unwrapData<Class>(response.data));
 }
 
 export async function createClass(data: CreateClassData): Promise<Class> {
   const response = await apiClient.post<ApiResponse<Class> | Class>(ENDPOINTS.CLASSES.LIST, data);
-  return unwrapData<Class>(response.data);
+  return normalizeClass(unwrapData<Class>(response.data));
 }
 
 export async function updateClass(id: number, data: UpdateClassData): Promise<Class> {
   const response = await apiClient.put<ApiResponse<Class> | Class>(ENDPOINTS.CLASSES.UPDATE(id), data);
-  return unwrapData<Class>(response.data);
+  return normalizeClass(unwrapData<Class>(response.data));
 }
 
 export async function deleteClass(id: number): Promise<void> {
@@ -86,7 +90,20 @@ export async function deleteClass(id: number): Promise<void> {
 
 export async function getClassMembers(classId: number): Promise<ClassMember[]> {
   const response = await apiClient.get<unknown>(ENDPOINTS.CLASSES.MEMBERS(classId));
-  return unwrapArray<ClassMember>(response.data);
+  return unwrapArray<Partial<ClassMember>>(response.data).map(normalizeClassMember);
+}
+
+export async function getAllStudents(): Promise<ClassMember[]> {
+  const response = await getUsers({ role: "student", limit: 10000 });
+  return response.data.map((user) => normalizeClassMember({
+    id: user.id,
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    studentId: user.studentId,
+    phone: user.phone,
+    enrolledAt: user.createdAt || "",
+  }));
 }
 
 export async function enrollStudent(classId: number, studentIdOrCode: number | string): Promise<void> {

@@ -1,38 +1,125 @@
-import { useState } from "react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
-import { Users, BookOpen, ClipboardList, GraduationCap, Calendar, History, Search, Filter } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Users, BookOpen, ClipboardList, Calendar, History, Filter, FileCheck, MessageSquare } from "lucide-react";
 import { Badge } from "../../../components/shared";
+import { getUsers, type User } from "../../../../service/admin.service";
+import { getClasses, type Class } from "../../../../service/class.service";
+import { getAssignments } from "../../../../service/assignment.service";
+import { getExams, type Exam } from "../../../../service/exam.service";
+import { getCourses } from "../../../../service/course.service";
+import { getDiscussions } from "../../../../service/discussion.service";
+import { getEnrollmentTrend, getSubmissionByCourse, getSystemStats, getTopStudents, type EnrollmentTrend, type ReportStats, type SubmissionByCourse, type TopStudent } from "../../../../service/report.service";
+import type { Assignment } from "../../assignments/types/assignment.types";
 
-// 1. Dữ liệu mẫu cơ cấu người dùng
-const userData = [
-  { name: "Sinh viên", value: 850, color: "#3B82F6" },
-  { name: "Giảng viên", value: 45, color: "#10B981" },
-  { name: "Quản trị viên", value: 5, color: "#F59E0B" },
-];
-
-// 2. Dữ liệu mẫu thống kê theo lớp học
-const classStatsData = [
-  { id: 1, className: "Web Development - Class A", assignments: 12, exams: 2, semester: "HK2 2025" },
-  { id: 2, className: "Data Structures - Class B", assignments: 8, exams: 1, semester: "HK2 2025" },
-  { id: 3, className: "Database Systems - Class A", assignments: 10, exams: 2, semester: "HK1 2025" },
-  { id: 4, className: "Software Engineering", assignments: 15, exams: 3, semester: "HK1 2025" },
-];
-
-// 3. Dữ liệu mẫu lịch sử cập nhật (Audit Log)
-const auditLogs = [
-  { id: 1, action: "Thêm mới", target: "Người dùng", detail: "Tạo tài khoản 'Nguyễn Văn A' (Sinh viên)", user: "Admin", time: "2026-06-05 09:30" },
-  { id: 2, action: "Chỉnh sửa", target: "Người dùng", detail: "Cập nhật quyền 'Trần Thị B' thành Giảng viên", user: "Admin", time: "2026-06-05 10:15" },
-  { id: 3, action: "Xóa", target: "Người dùng", detail: "Xóa tài khoản 'Lê Văn C'", user: "Admin", time: "2026-06-04 15:45" },
-  { id: 4, action: "Thêm mới", target: "Lớp học", detail: "Tạo lớp 'Mobile App Design'", user: "Admin", time: "2026-06-04 14:00" },
-];
-
-const semesters = ["HK2 2025", "HK1 2025", "HK2 2024", "HK1 2024"];
+function formatDate(date?: string) {
+  if (!date) return "Chưa cập nhật";
+  const timestamp = new Date(date).getTime();
+  if (Number.isNaN(timestamp)) return date;
+  return new Date(timestamp).toLocaleString("vi-VN");
+}
 
 export function Reports() {
-  const [selectedSemester, setSelectedSemester] = useState("HK2 2025");
+  const [selectedSemester, setSelectedSemester] = useState("all");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
+  const [loading, setLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [coursesCount, setCoursesCount] = useState(0);
+  const [discussionsCount, setDiscussionsCount] = useState(0);
+  const [stats, setStats] = useState<ReportStats | null>(null);
+  const [enrollmentTrend, setEnrollmentTrend] = useState<EnrollmentTrend[]>([]);
+  const [submissionByCourse, setSubmissionByCourse] = useState<SubmissionByCourse[]>([]);
+  const [topStudents, setTopStudents] = useState<TopStudent[]>([]);
 
-  const filteredClassStats = classStatsData.filter(item => item.semester === selectedSemester);
+  useEffect(() => {
+    const fetchReports = async () => {
+      const [
+        usersResult,
+        classesResult,
+        assignmentsResult,
+        examsResult,
+        coursesResult,
+        discussionsResult,
+        statsResult,
+        enrollmentResult,
+        submissionsResult,
+        topStudentsResult,
+      ] = await Promise.allSettled([
+        getUsers({ limit: 10000 }),
+        getClasses(),
+        getAssignments(),
+        getExams(),
+        getCourses(),
+        getDiscussions(),
+        getSystemStats(),
+        getEnrollmentTrend(),
+        getSubmissionByCourse(),
+        getTopStudents(),
+      ]);
+
+      if (usersResult.status === "fulfilled") setUsers(usersResult.value.data);
+      if (classesResult.status === "fulfilled") setClasses(classesResult.value);
+      if (assignmentsResult.status === "fulfilled") setAssignments(assignmentsResult.value);
+      if (examsResult.status === "fulfilled") setExams(examsResult.value);
+      if (coursesResult.status === "fulfilled") setCoursesCount(coursesResult.value.length);
+      if (discussionsResult.status === "fulfilled") setDiscussionsCount(discussionsResult.value.length);
+      if (statsResult.status === "fulfilled") setStats(statsResult.value);
+      if (enrollmentResult.status === "fulfilled") setEnrollmentTrend(enrollmentResult.value);
+      if (submissionsResult.status === "fulfilled") setSubmissionByCourse(submissionsResult.value);
+      if (topStudentsResult.status === "fulfilled") setTopStudents(topStudentsResult.value);
+
+      setLoading(false);
+    };
+
+    fetchReports();
+  }, []);
+
+  const semesters = useMemo(() => {
+    const values = Array.from(new Set(classes.map((item) => item.semester).filter(Boolean)));
+    return ["all", ...values];
+  }, [classes]);
+
+  const userData = useMemo(() => [
+    { name: "Sinh viên", value: users.filter((user) => user.role === "student").length, color: "#2563EB" },
+    { name: "Giảng viên", value: users.filter((user) => user.role === "teacher").length, color: "#059669" },
+    { name: "Quản trị viên", value: users.filter((user) => user.role === "admin").length, color: "#D97706" },
+  ], [users]);
+
+  const filteredClasses = selectedSemester === "all"
+    ? classes
+    : classes.filter((item) => item.semester === selectedSemester);
+
+  const overviewData = [
+    { label: "Người dùng", value: stats?.totalUsers ?? users.length, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+    { label: "Lớp học", value: stats?.totalClasses ?? classes.length, icon: BookOpen, color: "text-emerald-600", bg: "bg-emerald-50" },
+    { label: "Khóa học", value: stats?.totalCourses ?? coursesCount, icon: BookOpen, color: "text-amber-600", bg: "bg-amber-50" },
+    { label: "Bài tập", value: stats?.totalAssignments ?? assignments.length, icon: ClipboardList, color: "text-violet-600", bg: "bg-violet-50" },
+    { label: "Kỳ thi", value: stats?.totalExams ?? exams.length, icon: FileCheck, color: "text-rose-600", bg: "bg-rose-50" },
+    { label: "Thảo luận", value: stats?.totalDiscussions ?? discussionsCount, icon: MessageSquare, color: "text-cyan-600", bg: "bg-cyan-50" },
+  ];
+
+  const contentByCourse = submissionByCourse.length > 0
+    ? submissionByCourse
+    : Array.from(new Map(assignments.map((assignment) => [assignment.course, assignment.course])).values()).map((course, index) => ({
+        id: index + 1,
+        course: course || "Khóa học",
+        count: assignments.filter((assignment) => assignment.course === course).length,
+      }));
+
+  const auditLogs = [
+    ...users.slice(0, 2).map((item) => ({ id: `user-${item.id}`, action: "Đồng bộ", target: "Người dùng", detail: `${item.name} (${item.role})`, user: "Hệ thống", time: formatDate(item.updatedAt || item.createdAt) })),
+    ...classes.slice(0, 2).map((item) => ({ id: `class-${item.id}`, action: "Đồng bộ", target: "Lớp học", detail: item.name, user: item.instructorName || "Hệ thống", time: formatDate(item.createdAt) })),
+  ];
+
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in space-y-8">
@@ -52,7 +139,7 @@ export function Reports() {
               onChange={(e) => setSelectedSemester(e.target.value)}
               className="px-4 py-2 bg-background border border-input rounded-xl text-sm focus:ring-2 focus:ring-primary outline-none"
             >
-              {semesters.map(s => <option key={s} value={s}>{s}</option>)}
+              {semesters.map(s => <option key={s} value={s}>{s === "all" ? "Tất cả" : s}</option>)}
             </select>
           </div>
 
@@ -74,6 +161,18 @@ export function Reports() {
             />
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4">
+        {overviewData.map((item) => (
+          <div key={item.label} className="bg-card border border-border rounded-xl p-4 shadow-sm">
+            <div className={`w-10 h-10 rounded-lg ${item.bg} ${item.color} flex items-center justify-center mb-3`}>
+              <item.icon className="w-5 h-5" />
+            </div>
+            <p className="text-2xl font-bold">{item.value}</p>
+            <p className="text-xs text-muted-foreground">{item.label}</p>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -119,9 +218,9 @@ export function Reports() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-primary" />
-              Thống kê lớp học & Nội dung ({selectedSemester})
+              Thống kê lớp học & Nội dung ({selectedSemester === "all" ? "Tất cả" : selectedSemester})
             </h2>
-            <Badge variant="primary">{filteredClassStats.length} Lớp học</Badge>
+            <Badge variant="primary">{filteredClasses.length} Lớp học</Badge>
           </div>
           
           <div className="overflow-x-auto">
@@ -129,27 +228,27 @@ export function Reports() {
               <thead className="bg-slate-50 border-b border-border">
                 <tr>
                   <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase">Tên lớp học</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-center">Bài tập</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-center">Kỳ thi</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-right">Tổng nội dung</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-center">Sinh viên</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-center">Khóa học</th>
+                  <th className="px-4 py-3 text-xs font-semibold text-muted-foreground uppercase text-right">Học kỳ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredClassStats.map((item) => (
+                {filteredClasses.map((item) => (
                   <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-4 py-4 font-medium text-sm">{item.className}</td>
+                    <td className="px-4 py-4 font-medium text-sm">{item.name}</td>
                     <td className="px-4 py-4 text-center">
                       <span className="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                        <ClipboardList className="w-3 h-3" /> {item.assignments}
+                        <Users className="w-3 h-3" /> {item.studentCount || 0}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-center">
-                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
-                        <Calendar className="w-3 h-3" /> {item.exams}
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                        <BookOpen className="w-3 h-3" /> {item.courseCount || 0}
                       </span>
                     </td>
                     <td className="px-4 py-4 text-right font-bold text-slate-700">
-                      {item.assignments + item.exams}
+                      {item.semester}
                     </td>
                   </tr>
                 ))}
@@ -158,6 +257,65 @@ export function Reports() {
           </div>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <ClipboardList className="w-5 h-5 text-primary" />
+            Bài nộp theo khóa học
+          </h2>
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={contentByCourse}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="course" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#2563EB" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-primary" />
+            Xu hướng ghi danh
+          </h2>
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={enrollmentTrend}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="students" fill="#059669" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {topStudents.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h2 className="text-lg font-bold mb-6 flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            Sinh viên nổi bật
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {topStudents.slice(0, 6).map((student) => (
+              <div key={`${student.rank}-${student.name}`} className="border border-border rounded-xl p-4">
+                <p className="text-xs text-muted-foreground">Hạng #{student.rank}</p>
+                <p className="font-semibold mt-1">{student.name}</p>
+                <div className="mt-3 flex justify-between text-sm">
+                  <span>GPA {student.gpa}</span>
+                  <span>{student.completion}% hoàn thành</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Audit Log / Activity History */}
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">

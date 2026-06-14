@@ -1,6 +1,7 @@
 import apiClient from "../api/client";
 import { buildDownloadUrls, downloadFile } from "../api/download";
 import { ENDPOINTS } from "../api/endpoints";
+import { unwrapArray, unwrapData, type ApiResponse } from "./api-response";
 import type { 
   Assignment, 
   AssignmentAttachment,
@@ -9,11 +10,6 @@ import type {
   AssignmentStats, 
   AssignmentFormData 
 } from "../app/features/assignments/types/assignment.types";
-
-export interface ApiResponse<T> {
-  message: string;
-  data: T;
-}
 
 type RawAssignment = Partial<AssignmentDetail> & {
   courseName?: string;
@@ -123,8 +119,8 @@ export async function getAssignments(params?: {
   status?: string;
   courseId?: number;
 }): Promise<Assignment[]> {
-  const response = await apiClient.get<ApiResponse<RawAssignment[]>>(ENDPOINTS.ASSIGNMENTS.LIST, { params });
-  return response.data.data.map((assignment) => {
+  const response = await apiClient.get<unknown>(ENDPOINTS.ASSIGNMENTS.LIST, { params });
+  return unwrapArray<RawAssignment>(response.data).map((assignment) => {
     const normalized = normalizeAssignment(assignment);
     return {
       ...normalized,
@@ -135,12 +131,12 @@ export async function getAssignments(params?: {
 
 export async function getAssignmentDetail(id: number): Promise<AssignmentDetail> {
   const [assignmentResponse, attachmentsResponse] = await Promise.all([
-    apiClient.get<ApiResponse<RawAssignment>>(ENDPOINTS.ASSIGNMENTS.DETAIL(id)),
-    apiClient.get<ApiResponse<AssignmentAttachment[]>>(ENDPOINTS.ASSIGNMENT_ATTACHMENTS.BY_ASSIGNMENT(id)),
+    apiClient.get<unknown>(ENDPOINTS.ASSIGNMENTS.DETAIL(id)),
+    apiClient.get<unknown>(ENDPOINTS.ASSIGNMENT_ATTACHMENTS.BY_ASSIGNMENT(id)),
   ]);
   return normalizeAssignment({
-    ...assignmentResponse.data.data,
-    attachments: attachmentsResponse.data.data,
+    ...unwrapData<RawAssignment>(assignmentResponse.data),
+    attachments: unwrapArray<AssignmentAttachment>(attachmentsResponse.data),
   });
 }
 
@@ -149,7 +145,7 @@ export async function createAssignment(data: AssignmentFormData & { courseId: nu
     ENDPOINTS.ASSIGNMENTS.CREATE,
     buildAssignmentPayload(data)
   );
-  const assignment = normalizeAssignment(response.data.data);
+  const assignment = normalizeAssignment(unwrapData<RawAssignment>(response.data));
   await uploadAssignmentAttachments(assignment.id, data.attachments);
   return {
     ...assignment,
@@ -165,7 +161,7 @@ export async function updateAssignment(
     ENDPOINTS.ASSIGNMENTS.UPDATE(id),
     buildAssignmentPayload(data)
   );
-  const assignment = normalizeAssignment(response.data.data);
+  const assignment = normalizeAssignment(unwrapData<RawAssignment>(response.data));
   await uploadAssignmentAttachments(assignment.id, data.attachments);
   return {
     ...assignment,
@@ -178,10 +174,10 @@ export async function deleteAssignment(id: number): Promise<void> {
 }
 
 export async function getSubmissions(assignmentId: number): Promise<Submission[]> {
-  const response = await apiClient.get<ApiResponse<RawSubmission[]>>(
+  const response = await apiClient.get<unknown>(
     ENDPOINTS.SUBMISSIONS.BY_ASSIGNMENT(assignmentId)
   );
-  return response.data.data.map(normalizeSubmission);
+  return unwrapArray<RawSubmission>(response.data).map(normalizeSubmission);
 }
 
 export async function submitAssignment(
@@ -209,10 +205,10 @@ export async function gradeSubmission(
 }
 
 export async function getAssignmentStats(assignmentId: number): Promise<AssignmentStats> {
-  const response = await apiClient.get<ApiResponse<AssignmentStats>>(
+  const response = await apiClient.get<unknown>(
     `${ENDPOINTS.ASSIGNMENTS.DETAIL(assignmentId)}/stats`
   );
-  return response.data.data;
+  return unwrapData<AssignmentStats>(response.data);
 }
 
 export async function downloadAssignmentAttachment(

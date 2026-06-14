@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
-import { Users, BookOpen, User, Plus, FileUp, X, Loader2 } from "lucide-react";
+import { Users, BookOpen, User, Plus, FileUp, X, Loader2, Search } from "lucide-react";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canManageContent } from "../../../utils/permissions";
+import { canManageContent, normalizeRole } from "../../../utils/permissions";
 import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { useClasses } from "../hooks/useClasses";
@@ -10,10 +10,11 @@ import * as XLSX from "xlsx";
 
 export function Classes() {
   const { user } = useAuth();
-  const userRole = user?.role || "student";
-  const { classes, loading, fetchClasses, handleCreateClass } = useClasses();
+  const userRole = normalizeRole(user?.role);
+  const { classes, loading, students, fetchClasses, fetchAllStudents, handleCreateClass } = useClasses();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState("");
+  const [studentSearch, setStudentSearch] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     instructorId: user?.id || 0,
@@ -26,6 +27,7 @@ export function Classes() {
   }, [fetchClasses]);
 
   const handleCreate = () => {
+    if (!canManageContent(userRole)) return;
     setFormData({
       name: "",
       instructorId: user?.id || 0,
@@ -33,6 +35,8 @@ export function Classes() {
       studentIds: [],
     });
     setCurrentStudentId("");
+    setStudentSearch("");
+    fetchAllStudents();
     setShowCreateModal(true);
   };
 
@@ -56,6 +60,31 @@ export function Classes() {
       studentIds: formData.studentIds.filter((s) => s !== id),
     });
   };
+
+  const getStudentCode = (student: { id?: number; userId?: number; studentId?: string }) => (
+    student.studentId || String(student.userId || student.id || "")
+  );
+
+  const handleToggleStudent = (student: { id?: number; userId?: number; studentId?: string }) => {
+    const code = getStudentCode(student);
+    if (!code) return;
+    setFormData((prev) => ({
+      ...prev,
+      studentIds: prev.studentIds.includes(code)
+        ? prev.studentIds.filter((item) => item !== code)
+        : [...prev.studentIds, code],
+    }));
+  };
+
+  const filteredStudents = students.filter((student) => {
+    const query = studentSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      student.name.toLowerCase().includes(query) ||
+      student.email.toLowerCase().includes(query) ||
+      String(student.studentId || "").toLowerCase().includes(query)
+    );
+  });
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -236,6 +265,49 @@ export function Classes() {
                 <span>Excel</span>
                 <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} />
               </label>
+            </div>
+
+            <div className="mb-4">
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                  placeholder="Tìm sinh viên theo tên, email hoặc MSSV..."
+                />
+              </div>
+              <div className="max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                {filteredStudents.slice(0, 80).map((student) => {
+                  const code = getStudentCode(student);
+                  const checked = formData.studentIds.includes(code);
+                  return (
+                    <label
+                      key={student.id || student.userId || code}
+                      className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleToggleStudent(student)}
+                        className="w-4 h-4"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{student.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {code || "Chưa có MSSV"} • {student.email}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+                {filteredStudents.length === 0 && (
+                  <div className="py-6 text-center text-sm text-muted-foreground">
+                    Không tìm thấy sinh viên phù hợp
+                  </div>
+                )}
+              </div>
             </div>
 
             {formData.studentIds.length > 0 && (

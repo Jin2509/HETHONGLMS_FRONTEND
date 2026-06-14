@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canSubmitWork } from "../../../utils/permissions";
+import { canSubmitWork, normalizeRole } from "../../../utils/permissions";
 import { AssignmentInfo } from "../components/AssignmentInfo";
 import { StudentSubmissionPanel } from "../components/StudentSubmissionPanel";
 import { TeacherGradingPanel } from "../components/TeacherGradingPanel";
@@ -10,7 +10,7 @@ import { useEffect } from "react";
 export function AssignmentDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
-  const userRole = user?.role || "student";
+  const userRole = normalizeRole(user?.role);
   
   const { 
     assignmentDetail, 

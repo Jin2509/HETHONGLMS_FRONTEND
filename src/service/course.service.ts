@@ -1,6 +1,7 @@
 import apiClient from "../api/client";
 import { buildDownloadUrls, downloadFile } from "../api/download";
 import { ENDPOINTS } from "../api/endpoints";
+import { unwrapArray, unwrapData, type ApiResponse } from "./api-response";
 
 export interface CourseMaterial {
   id: number;
@@ -23,6 +24,7 @@ export interface CourseChapter {
 
 export interface Course {
   id: number;
+  classId?: number;
   name: string;
   description?: string;
   thumbnailUrl?: string;
@@ -34,6 +36,8 @@ export interface CreateCourseData {
   name: string;
   description?: string;
   thumbnailUrl?: string;
+  classId?: number;
+  studentIds?: string[];
 }
 
 export interface UpdateCourseData {
@@ -42,48 +46,59 @@ export interface UpdateCourseData {
   thumbnailUrl?: string;
 }
 
-export interface ApiResponse<T> {
-  message: string;
-  data: T;
+function normalizeMaterial(material: Partial<CourseMaterial>): CourseMaterial {
+  return {
+    id: Number(material.id || 0),
+    name: material.name || "Tài liệu",
+    type: material.type || "file",
+    url: material.url,
+    fileUrl: material.fileUrl,
+    path: material.path,
+    downloadUrl: material.downloadUrl,
+    size: material.size,
+    date: material.date,
+  };
 }
 
-function hasData<T>(payload: unknown): payload is ApiResponse<T> {
-  return typeof payload === "object" && payload !== null && "data" in payload;
+function normalizeChapter(chapter: Partial<CourseChapter>): CourseChapter {
+  return {
+    id: Number(chapter.id || 0),
+    name: chapter.name || "Chương học",
+    sortOrder: Number(chapter.sortOrder || 0),
+    materials: (chapter.materials || []).map(normalizeMaterial),
+  };
 }
 
-function unwrapData<T>(payload: T | ApiResponse<T>): T {
-  return hasData<T>(payload) ? payload.data : payload;
+function normalizeCourse(course: Partial<Course> & { class_id?: number }): Course {
+  return {
+    id: Number(course.id || 0),
+    classId: course.classId ?? course.class_id,
+    name: course.name || "",
+    description: course.description || "",
+    thumbnailUrl: course.thumbnailUrl,
+    instructor: course.instructor,
+    chapters: (course.chapters || []).map(normalizeChapter),
+  };
 }
 
-function unwrapArray<T>(payload: unknown): T[] {
-  const data = unwrapData<unknown>(payload as unknown);
-  if (Array.isArray(data)) {
-    return data as T[];
-  }
-  if (typeof data === "object" && data !== null && "content" in data && Array.isArray((data as { content?: unknown }).content)) {
-    return (data as { content: T[] }).content;
-  }
-  return [];
-}
-
-export async function getCourses(): Promise<Course[]> {
-  const response = await apiClient.get<unknown>(ENDPOINTS.COURSES.LIST);
-  return unwrapArray<Course>(response.data);
+export async function getCourses(params?: { classId?: number }): Promise<Course[]> {
+  const response = await apiClient.get<unknown>(ENDPOINTS.COURSES.LIST, { params });
+  return unwrapArray<Partial<Course>>(response.data).map(normalizeCourse);
 }
 
 export async function getCourseDetail(id: number): Promise<Course> {
   const response = await apiClient.get<ApiResponse<Course> | Course>(ENDPOINTS.COURSES.DETAIL(id));
-  return unwrapData<Course>(response.data);
+  return normalizeCourse(unwrapData<Course>(response.data));
 }
 
 export async function createCourse(data: CreateCourseData): Promise<Course> {
   const response = await apiClient.post<ApiResponse<Course> | Course>(ENDPOINTS.COURSES.CREATE, data);
-  return unwrapData<Course>(response.data);
+  return normalizeCourse(unwrapData<Course>(response.data));
 }
 
 export async function updateCourse(id: number, data: UpdateCourseData): Promise<Course> {
   const response = await apiClient.patch<ApiResponse<Course> | Course>(ENDPOINTS.COURSES.UPDATE(id), data);
-  return unwrapData<Course>(response.data);
+  return normalizeCourse(unwrapData<Course>(response.data));
 }
 
 export async function deleteCourse(id: number): Promise<void> {
@@ -92,7 +107,7 @@ export async function deleteCourse(id: number): Promise<void> {
 
 export async function createChapter(courseId: number, name: string): Promise<CourseChapter> {
   const response = await apiClient.post<ApiResponse<CourseChapter> | CourseChapter>(ENDPOINTS.COURSES.CHAPTERS(courseId), { name });
-  return unwrapData<CourseChapter>(response.data);
+  return normalizeChapter(unwrapData<CourseChapter>(response.data));
 }
 
 export async function uploadMaterial(courseId: number, chapterId: number, file: File, name: string): Promise<CourseMaterial> {
@@ -105,7 +120,7 @@ export async function uploadMaterial(courseId: number, chapterId: number, file: 
     formData,
     { headers: { "Content-Type": "multipart/form-data" } }
   );
-  return unwrapData<CourseMaterial>(response.data);
+  return normalizeMaterial(unwrapData<CourseMaterial>(response.data));
 }
 
 export async function deleteMaterial(courseId: number, materialId: number): Promise<void> {

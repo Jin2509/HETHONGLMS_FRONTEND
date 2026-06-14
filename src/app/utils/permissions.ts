@@ -4,6 +4,16 @@
 
 export type UserRole = "admin" | "teacher" | "student";
 
+const VALID_ROLES: UserRole[] = ["admin", "teacher", "student"];
+
+/**
+ * Normalize role strings from API/localStorage to FE role union.
+ */
+export function normalizeRole(role?: string | null): UserRole {
+  const normalized = (role || "student").trim().toLowerCase();
+  return VALID_ROLES.includes(normalized as UserRole) ? (normalized as UserRole) : "student";
+}
+
 /**
  * Check if user can create/edit/delete assignments or exams
  */
@@ -13,10 +23,10 @@ export function canManageContent(role: UserRole): boolean {
 
 /**
  * Check if user can grade submissions
- * Only teachers can grade, admins cannot
+ * Admins and teachers can grade
  */
 export function canGradeSubmissions(role: UserRole): boolean {
-  return role === "teacher";
+  return role === "admin" || role === "teacher";
 }
 
 /**

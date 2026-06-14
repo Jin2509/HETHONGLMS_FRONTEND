@@ -26,11 +26,10 @@ import { Badge, DataTable, Modal } from "../../../components/shared";
 import type { Column } from "../../../components/shared";
 import { toast } from "sonner";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canViewAllSubmissions, canManageContent } from "../../../utils/permissions";
+import { canViewAllSubmissions, canManageContent, normalizeRole } from "../../../utils/permissions";
 import { TeacherGradeManagement } from "../components/TeacherGradeManagement";
-import { useClasses } from "../hooks/useClasses";
-import { getClassDetail, type ClassMember } from "../../../../service/class.service";
-import { getCourses, type Course } from "../../../../service/course.service";
+import { getAllStudents, getClassDetail, getClassMembers, enrollStudent, type ClassMember } from "../../../../service/class.service";
+import { createCourse, deleteCourse, getCourses, updateCourse, type Course } from "../../../../service/course.service";
 
 export interface Student {
   id: number;
@@ -76,9 +75,8 @@ export interface ClassDetailData {
 export function ClassDetail() {
   const { id } = useParams();
   const { user } = useAuth();
-  const userRole = user?.role || "student";
+  const userRole = normalizeRole(user?.role);
   const canViewStudents = canViewAllSubmissions(userRole);
-  const { fetchClassDetail, fetchClassMembers } = useClasses();
   
   const [activeTab, setActiveTab] = useState<"overview" | "students" | "courses" | "materials" | "announcements" | "grades">("overview");
   const [searchQuery, setSearchQuery] = useState("");
@@ -86,6 +84,7 @@ export function ClassDetail() {
   const [classData, setClassData] = useState<ClassDetailData | null>(null);
   const [classStudents, setClassStudents] = useState<Student[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
+  const [studentSearch, setStudentSearch] = useState("");
   const [materials, setMaterials] = useState<Material[]>([]);
   const [courses, setCourses] = useState<CourseWithProgress[]>([]);
   const [showCreateCourseModal, setShowCreateCourseModal] = useState(false);
@@ -99,6 +98,7 @@ export function ClassDetail() {
     thumbnail: "",
     lessons: 20,
     duration: "",
+    studentIds: [] as string[],
   });
   const [materialFormData, setMaterialFormData] = useState({
     name: "",
@@ -129,19 +129,35 @@ export function ClassDetail() {
           endDate: '2026-06-15',
         });
 
-        // Fetch class members
-        await fetchClassMembers(Number(id));
-        // Note: members are stored in the hook's state, we'll use them from there
-        // For now, we'll use an empty array and the hook will update the state
-        const students: Student[] = [];
-        setClassStudents(students);
-        setAllStudents(students);
+        const toStudent = (member: ClassMember): Student => ({
+          id: member.userId || member.id || 0,
+          studentId: member.studentId || String(member.userId || member.id || ""),
+          name: member.name,
+          email: member.email,
+          department: member.department || "Chưa cập nhật",
+        });
+
+        const members = await getClassMembers(Number(id));
+        setClassStudents(members.map(toStudent));
+
+        if (canManageContent(userRole)) {
+          try {
+            const studentList = await getAllStudents();
+            setAllStudents(studentList.map(toStudent));
+          } catch (error) {
+            console.error("Failed to fetch student directory:", error);
+            setAllStudents([]);
+          }
+        } else {
+          setAllStudents([]);
+        }
 
         // Fetch courses for this class
         try {
-          const classCourses = await getCourses();
+          const classCourses = await getCourses({ classId: Number(id) });
+          const scopedCourses = classCourses.filter((course) => !course.classId || course.classId === Number(id));
           // Transform courses to include UI-specific properties
-          const coursesWithProgress: CourseWithProgress[] = classCourses.map((course): CourseWithProgress => ({
+          const coursesWithProgress: CourseWithProgress[] = scopedCourses.map((course): CourseWithProgress => ({
             ...course,
             thumbnail: course.thumbnailUrl,
             status: 'Đang học',
@@ -166,7 +182,7 @@ export function ClassDetail() {
     };
 
     fetchData();
-  }, [id, fetchClassDetail, fetchClassMembers]);
+  }, [id, userRole]);
 
   const filteredStudents = searchQuery.trim() === ""
     ? classStudents
@@ -182,14 +198,32 @@ export function ClassDetail() {
       setClassStudents(classStudents.filter((s) => s.id !== student.id));
       toast.success(`Đã xóa ${student.name} khỏi lớp học`);
     } else {
-      setClassStudents([...classStudents, student]);
-      toast.success(`Đã thêm ${student.name} vào lớp học`);
+      if (!id) return;
+      enrollStudent(Number(id), student.studentId)
+        .then(() => {
+          setClassStudents([...classStudents, student]);
+          toast.success(`Đã thêm ${student.name} vào lớp học`);
+        })
+        .catch((error: any) => {
+          const message = error.response?.data?.message || "Không thể thêm sinh viên vào lớp";
+          toast.error(message);
+        });
     }
   };
 
   const handleCreateCourse = () => {
-    setCourseFormData({ name: "", description: "", thumbnail: "", lessons: 20, duration: "" });
+    setCourseFormData({ name: "", description: "", thumbnail: "", lessons: 20, duration: "", studentIds: [] });
+    setStudentSearch("");
     setShowCreateCourseModal(true);
+  };
+
+  const handleToggleCourseStudent = (student: Student) => {
+    setCourseFormData((prev) => ({
+      ...prev,
+      studentIds: prev.studentIds.includes(student.studentId)
+        ? prev.studentIds.filter((id) => id !== student.studentId)
+        : [...prev.studentIds, student.studentId],
+    }));
   };
 
   const handleUploadMaterial = () => {
@@ -221,6 +255,7 @@ export function ClassDetail() {
       thumbnail: course.thumbnail || course.thumbnailUrl || '',
       lessons: course.lessons || 20,
       duration: course.duration || '',
+      studentIds: [],
     });
     setShowEditCourseModal(true);
   };
@@ -236,27 +271,37 @@ export function ClassDetail() {
       return;
     }
     try {
-      // TODO: Implement actual course creation API call
-      // const newCourse = await createCourse({
-      //   name: courseFormData.name,
-      //   description: courseFormData.description,
-      //   thumbnailUrl: courseFormData.thumbnail,
-      // });
-      
-      const newCourse: CourseWithProgress = {
-        id: Date.now(),
+      const selectedStudents = allStudents.filter((student) => courseFormData.studentIds.includes(student.studentId));
+      await Promise.all(
+        selectedStudents
+          .filter((student) => !classStudents.some((member) => member.studentId === student.studentId))
+          .map((student) => enrollStudent(Number(id), student.studentId))
+      );
+
+      const newCourse = await createCourse({
+        classId: Number(id),
         name: courseFormData.name,
         description: courseFormData.description,
         thumbnailUrl: courseFormData.thumbnail,
-        thumbnail: courseFormData.thumbnail,
+        studentIds: courseFormData.studentIds,
+      });
+
+      const newCourseWithProgress: CourseWithProgress = {
+        ...newCourse,
+        thumbnail: newCourse.thumbnailUrl,
         status: 'Đang học',
         lessons: courseFormData.lessons,
         duration: courseFormData.duration,
         progress: 0,
-        chapters: [],
       };
       
-      setCourses([...courses, newCourse]);
+      setCourses([...courses, newCourseWithProgress]);
+      if (selectedStudents.length > 0) {
+        setClassStudents((prev) => {
+          const existing = new Set(prev.map((student) => student.studentId));
+          return [...prev, ...selectedStudents.filter((student) => !existing.has(student.studentId))];
+        });
+      }
       setShowCreateCourseModal(false);
       toast.success("Tạo khóa học thành công", {
         description: `Khóa học "${courseFormData.name}" đã được thêm vào lớp`,
@@ -272,12 +317,11 @@ export function ClassDetail() {
       return;
     }
     try {
-      // TODO: Implement actual course update API call
-      // await updateCourse(selectedCourse.id, {
-      //   name: courseFormData.name,
-      //   description: courseFormData.description,
-      //   thumbnailUrl: courseFormData.thumbnail,
-      // });
+      await updateCourse(selectedCourse.id, {
+        name: courseFormData.name,
+        description: courseFormData.description,
+        thumbnailUrl: courseFormData.thumbnail,
+      });
       
       setCourses(courses.map(c => 
         c.id === selectedCourse.id 
@@ -304,8 +348,7 @@ export function ClassDetail() {
     if (!selectedCourse) return;
     
     try {
-      // TODO: Implement actual course deletion API call
-      // await deleteCourse(selectedCourse.id);
+      await deleteCourse(selectedCourse.id);
       
       const courseName = selectedCourse.name;
       setCourses(courses.filter(c => c.id !== selectedCourse.id));
@@ -404,6 +447,15 @@ export function ClassDetail() {
       },
     },
   ];
+  const filteredCourseStudents = allStudents.filter((student) => {
+    const query = studentSearch.trim().toLowerCase();
+    if (!query) return true;
+    return (
+      student.name.toLowerCase().includes(query) ||
+      student.email.toLowerCase().includes(query) ||
+      student.studentId.toLowerCase().includes(query)
+    );
+  });
 
   if (loading) {
     return (
@@ -895,6 +947,61 @@ export function ClassDetail() {
                 className="w-full px-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
                 placeholder="8 tuần"
               />
+            </div>
+          </div>
+          <div className="pt-4 border-t border-border">
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium">
+                Chọn sinh viên thêm vào lớp
+              </label>
+              <span className="text-xs text-muted-foreground">
+                Đã chọn {courseFormData.studentIds.length}
+              </span>
+            </div>
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                type="text"
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 border border-input rounded-lg focus:outline-none focus:ring-2 focus:ring-ring"
+                placeholder="Tìm sinh viên theo tên, email hoặc MSSV..."
+              />
+            </div>
+            <div className="max-h-52 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+              {filteredCourseStudents.slice(0, 100).map((student) => {
+                const checked = courseFormData.studentIds.includes(student.studentId);
+                const alreadyInClass = classStudents.some((member) => member.studentId === student.studentId);
+                return (
+                  <label
+                    key={student.id || student.studentId}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleCourseStudent(student)}
+                      className="w-4 h-4"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{student.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {student.studentId || "Chưa có MSSV"} • {student.email}
+                      </p>
+                    </div>
+                    {alreadyInClass && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-semibold">
+                        Trong lớp
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+              {filteredCourseStudents.length === 0 && (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  Không tìm thấy sinh viên phù hợp
+                </div>
+              )}
             </div>
           </div>
           <div className="flex gap-3 pt-4">

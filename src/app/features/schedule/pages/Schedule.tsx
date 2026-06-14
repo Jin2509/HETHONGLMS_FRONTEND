@@ -3,11 +3,11 @@ import { Calendar, Clock, MapPin, Video, ChevronLeft, ChevronRight, Plus, Loader
 import { formatVietnamDate } from "../../../utils/datetime";
 import { useSchedule } from "../hooks/useSchedule";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canManageContent } from "../../../utils/permissions";
+import { canManageContent, normalizeRole } from "../../../utils/permissions";
 
 export function Schedule() {
   const { user } = useAuth();
-  const userRole = user?.role || "student";
+  const userRole = normalizeRole(user?.role);
   const { events, loading, fetchSchedule } = useSchedule();
   const [view, setView] = useState<"week" | "month" | "list">("week");
   const [currentWeek, setCurrentWeek] = useState(0);

@@ -1,11 +1,11 @@
-import { createBrowserRouter, Navigate } from "react-router";
+import { createBrowserRouter, Navigate, Outlet } from "react-router";
+import { AuthProvider } from "./contexts/AuthContext"; // Đảm bảo import đúng đường dẫn nhé
 import { MainLayout } from "./components/layout/MainLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Login } from "./features/auth/pages/Login";
 import { Dashboard } from "./features/dashboard/pages/Dashboard";
 import { CoursesList } from "./features/courses/pages/CoursesList";
 import { CourseDetail } from "./features/courses/pages/CourseDetail";
-// Assignment pages - refactored structure
 import { AssignmentListPage } from "./features/assignments/pages/AssignmentListPage";
 import { AssignmentDetailPage } from "./features/assignments/pages/AssignmentDetailPage";
 import { ExamsList } from "./features/exams/pages/ExamsList";
@@ -24,74 +24,84 @@ import { ComponentShowcase } from "./components/demo/ComponentShowcase";
 
 export const router = createBrowserRouter([
   {
-    path: "/login",
-    Component: Login,
-  },
-  {
-    path: "/",
+    // BỌC ROOT: Mọi route con nằm bên dưới đều sẽ nhận được Auth Context một cách an toàn
     element: (
-      <ProtectedRoute>
-        <MainLayout />
-      </ProtectedRoute>
+      <AuthProvider>
+        <Outlet />
+      </AuthProvider>
     ),
     children: [
-      { index: true, Component: Dashboard },
-
-      // Learning (Courses moved into Classes)
-      { path: "courses", element: <Navigate to="/classes" replace /> },
-      { path: "courses/:id", Component: CourseDetail },
-
-      // Assessment
-      { path: "assignments", Component: AssignmentListPage },
-      { path: "assignments/:id", Component: AssignmentDetailPage },
-      { path: "exams", Component: ExamsList },
-      { path: "exams/:id/take", Component: ExamTake },
-      { path: "exams/:id/result", Component: ExamResult },
-      { 
-        path: "exams/:id/submissions", 
-        element: (
-          <ProtectedRoute allowedRoles={["teacher", "admin"]}>
-            <ExamSubmissions />
-          </ProtectedRoute>
-        ),
-      },
-      { 
-        path: "grades", 
-        element: (
-          <ProtectedRoute allowedRoles={["student"]}>
-            <Grades />
-          </ProtectedRoute>
-        ),
-      },
-
-      // Community
-      { path: "discussions", Component: Discussions },
-      { path: "classes", Component: Classes },
-      { path: "classes/:id", Component: ClassDetail },
-      { path: "schedule", Component: Schedule },
-
-      // Manage (Admin only)
       {
-        path: "reports",
-        element: (
-          <ProtectedRoute allowedRoles={["admin"]}>
-            <Reports />
-          </ProtectedRoute>
-        ),
+        path: "/login",
+        Component: Login,
       },
       {
-        path: "admin",
+        path: "/",
         element: (
-          <ProtectedRoute allowedRoles={["admin"]}>
-            <AdminUsers />
+          <ProtectedRoute>
+            <MainLayout />
           </ProtectedRoute>
         ),
+        children: [
+          { index: true, Component: Dashboard },
+
+          // Learning (Courses moved into Classes)
+          { path: "courses", element: <Navigate to="/classes" replace /> },
+          { path: "courses/:id", Component: CourseDetail },
+
+          // Assessment
+          { path: "assignments", Component: AssignmentListPage },
+          { path: "assignments/:id", Component: AssignmentDetailPage },
+          { path: "exams", Component: ExamsList },
+          { path: "exams/:id/take", Component: ExamTake },
+          { path: "exams/:id/result", Component: ExamResult },
+          {
+            path: "exams/:id/submissions",
+            element: (
+              <ProtectedRoute allowedRoles={["teacher", "admin"]}>
+                <ExamSubmissions />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: "grades",
+            element: (
+              <ProtectedRoute allowedRoles={["student", "teacher", "admin"]}>
+                <Grades />
+              </ProtectedRoute>
+            ),
+          },
+
+          // Community
+          { path: "discussions", Component: Discussions },
+          { path: "classes", Component: Classes },
+          { path: "classes/:id", Component: ClassDetail },
+          { path: "schedule", Component: Schedule },
+
+          // Manage (Admin only)
+          {
+            path: "reports",
+            element: (
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Reports />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: "admin",
+            element: (
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminUsers />
+              </ProtectedRoute>
+            ),
+          },
+
+          // Demo
+          { path: "components", Component: ComponentShowcase },
+
+          { path: "*", Component: NotFound },
+        ],
       },
-
-      // Demo
-      { path: "components", Component: ComponentShowcase },
-
-      { path: "*", Component: NotFound },
     ],
   },
 ]);

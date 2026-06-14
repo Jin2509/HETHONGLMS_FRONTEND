@@ -5,14 +5,14 @@ import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { getVietnamDateInputValue } from "../../../utils/datetime";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canManageContent } from "../../../utils/permissions";
+import { canManageContent, normalizeRole } from "../../../utils/permissions";
 import { useExam } from "../hooks/useExam";
 import { useCourses } from "../../courses/hooks/useCourses";
 import { downloadExamAttachment, type ExamAttachment } from "../../../../service/exam.service";
 
 export function ExamsList() {
   const { user } = useAuth();
-  const userRole = user?.role || "student";
+  const userRole = normalizeRole(user?.role);
   const { 
     exams, 
     loading, 

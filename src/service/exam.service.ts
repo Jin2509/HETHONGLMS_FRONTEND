@@ -1,6 +1,7 @@
 import apiClient from "../api/client";
 import { buildDownloadUrls, downloadFile } from "../api/download";
 import { ENDPOINTS } from "../api/endpoints";
+import { unwrapArray, unwrapData, type ApiResponse } from "./api-response";
 
 export interface ExamAttachment {
   id: number;
@@ -84,11 +85,6 @@ export interface ExamReviewQuestion {
   explanation: string;
 }
 
-export interface ApiResponse<T> {
-  message: string;
-  data: T;
-}
-
 export type ExamPayload = Partial<Exam> & {
   attachments?: File[];
 };
@@ -140,7 +136,15 @@ function normalizeExam(raw: Partial<Exam> & { questions?: ExamQuestion[]; totalP
     duration: Number(raw.duration || 0),
     totalPoints: Number(raw.totalPoints ?? 10),
     status: (raw.status || "upcoming") as Exam["status"],
-    attachments: raw.attachments || [],
+    attachments: (raw.attachments || []).map((attachment) => ({
+      id: Number(attachment.id || 0),
+      name: attachment.name || "Tệp đính kèm",
+      size: attachment.size,
+      url: attachment.url,
+      fileUrl: attachment.fileUrl,
+      path: attachment.path,
+      downloadUrl: attachment.downloadUrl,
+    })),
     questions: (raw.questions || []).map(normalizeQuestion),
   };
 }
@@ -192,13 +196,13 @@ function buildExamResult(submission: ExamSubmission): ExamResult {
 }
 
 export async function getExams(params?: { courseId?: number }): Promise<Exam[]> {
-  const response = await apiClient.get<ApiResponse<Exam[]>>(ENDPOINTS.EXAMS.LIST, { params });
-  return response.data.data.map((exam) => normalizeExam(exam));
+  const response = await apiClient.get<unknown>(ENDPOINTS.EXAMS.LIST, { params });
+  return unwrapArray<Exam>(response.data).map((exam) => normalizeExam(exam));
 }
 
 export async function getExamDetail(id: number): Promise<Exam & { questions: ExamQuestion[] }> {
-  const response = await apiClient.get<ApiResponse<Exam & { questions: ExamQuestion[] }>>(ENDPOINTS.EXAMS.DETAIL(id));
-  return normalizeExam(response.data.data);
+  const response = await apiClient.get<unknown>(ENDPOINTS.EXAMS.DETAIL(id));
+  return normalizeExam(unwrapData<Exam & { questions: ExamQuestion[] }>(response.data));
 }
 
 export async function createExam(data: ExamPayload): Promise<Exam> {
@@ -206,7 +210,7 @@ export async function createExam(data: ExamPayload): Promise<Exam> {
     ENDPOINTS.EXAMS.CREATE,
     buildExamPayload(data)
   );
-  const exam = response.data.data;
+  const exam = unwrapData<Exam>(response.data);
   await uploadExamAttachments(exam.id, data.attachments);
   return getExamDetail(exam.id);
 }
@@ -216,7 +220,7 @@ export async function updateExam(id: number, data: ExamPayload): Promise<Exam> {
     ENDPOINTS.EXAMS.UPDATE(id),
     buildExamPayload(data)
   );
-  const exam = response.data.data;
+  const exam = unwrapData<Exam>(response.data);
   await uploadExamAttachments(exam.id, data.attachments);
   return getExamDetail(exam.id);
 }
@@ -235,13 +239,13 @@ export async function submitExam(id: number, answers: Record<number, number | nu
 }
 
 export async function getExamResult(id: number): Promise<ExamResult> {
-  const response = await apiClient.get<ApiResponse<ExamSubmission>>(ENDPOINTS.EXAMS.RESULT(id));
-  return buildExamResult(normalizeSubmission(response.data.data));
+  const response = await apiClient.get<unknown>(ENDPOINTS.EXAMS.RESULT(id));
+  return buildExamResult(normalizeSubmission(unwrapData<ExamSubmission>(response.data)));
 }
 
 export async function getExamSubmissions(id: number): Promise<ExamSubmission[]> {
-  const response = await apiClient.get<ApiResponse<ExamSubmission[]>>(ENDPOINTS.EXAMS.SUBMISSIONS(id));
-  return response.data.data.map(normalizeSubmission);
+  const response = await apiClient.get<unknown>(ENDPOINTS.EXAMS.SUBMISSIONS(id));
+  return unwrapArray<ExamSubmission>(response.data).map(normalizeSubmission);
 }
 
 export async function gradeExamSubmission(

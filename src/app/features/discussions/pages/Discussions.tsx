@@ -13,10 +13,12 @@ import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { useDiscussion } from "../hooks/useDiscussion";
 import { useAuth } from "../../../contexts/AuthContext";
+import { isAdmin, normalizeRole } from "../../../utils/permissions";
 import { useCourses } from "../../courses/hooks/useCourses";
 
 export function Discussions() {
   const { user } = useAuth();
+  const userRole = normalizeRole(user?.role);
   const [filter, setFilter] = useState<"all" | "unread" | "mine">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const {
@@ -267,7 +269,7 @@ export function Discussions() {
                       </div>
                     </div>
                   </button>
-                  {user?.role === "admin" && (
+                  {isAdmin(userRole) && (
                     <div className="absolute top-3 right-3 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => handleEdit(thread, e)}

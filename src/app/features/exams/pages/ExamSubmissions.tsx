@@ -2,7 +2,7 @@ import { useState, useEffect, Fragment } from "react";
 import { Link, useParams } from "react-router";
 import { ChevronLeft, Download, Eye, Save, FileText, Calendar, Users, Clock, Loader2 } from "lucide-react";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canGradeSubmissions } from "../../../utils/permissions";
+import { canGradeSubmissions, normalizeRole } from "../../../utils/permissions";
 import { toast } from "sonner";
 import { useExam } from "../hooks/useExam";
 import { downloadExamSubmissionFile, type ExamSubmission } from "../../../../service/exam.service";
@@ -10,7 +10,7 @@ import { downloadExamSubmissionFile, type ExamSubmission } from "../../../../ser
 export function ExamSubmissions() {
   const { id } = useParams();
   const { user } = useAuth();
-  const userRole = user?.role || "student";
+  const userRole = normalizeRole(user?.role);
   const { 
     examDetail, 
     submissions, 

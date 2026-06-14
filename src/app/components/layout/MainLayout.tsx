@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../../contexts/AuthContext";
+import { normalizeRole } from "../../utils/permissions";
 import {
   LayoutDashboard,
   BookOpen,
@@ -69,6 +70,9 @@ export function MainLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const userRole = normalizeRole(user?.role);
+  const displayName = user?.name || user?.email || "Người dùng";
+  const avatarInitial = displayName.charAt(0).toUpperCase();
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -103,25 +107,13 @@ export function MainLayout() {
   const filteredGroups = navigationGroups.filter((group) => {
     if (group.label === "QUẢN TRỊ") {
       // Báo cáo chỉ dành cho Admin, trang Admin chỉ dành cho Admin
-      return user?.role === "admin";
+      return userRole === "admin";
     }
     return true;
   });
 
   const filteredNavigationGroups = filteredGroups.map((group) => {
-    // ASSESSMENT group: hide Grades for admin and teacher
-    if (group.label === "ĐÁNH GIÁ") {
-      return {
-        ...group,
-        items: group.items.filter((item) => {
-          if (item.path === "/grades") {
-            return user?.role === "student";
-          }
-          return true;
-        }),
-      };
-    }
-
+    // ASSESSMENT group: all roles can see Grades now
     return group;
   });
 
@@ -197,17 +189,17 @@ export function MainLayout() {
                     className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-blue-600 text-white flex items-center justify-center hover:shadow-lg hover:scale-105 transition-all"
                   >
                     <span className="text-sm font-semibold">
-                      {user?.name.charAt(0).toUpperCase()}
+                      {avatarInitial}
                     </span>
                   </button>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-sidebar-foreground truncate">
-                      {user?.name}
+                      {displayName}
                     </p>
                     <p className="text-xs text-sidebar-muted">
-                      {user?.role === "admin"
+                      {userRole === "admin"
                         ? "Quản trị viên"
-                        : user?.role === "teacher"
+                        : userRole === "teacher"
                           ? "Giảng viên"
                           : "Sinh viên"}
                     </p>
@@ -239,7 +231,7 @@ export function MainLayout() {
                 >
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-blue-600 text-white flex items-center justify-center hover:shadow-lg hover:scale-105 transition-all">
                     <span className="text-xs font-semibold">
-                      {user?.name.charAt(0).toUpperCase()}
+                      {avatarInitial}
                     </span>
                   </div>
                 </button>
@@ -317,12 +309,12 @@ export function MainLayout() {
                   <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-border py-2 z-50">
                     <div className="px-4 py-3 border-b border-border">
                       <p className="text-sm font-semibold text-foreground truncate text-white/70">
-                        {user?.name}
+                      {displayName}
                       </p>
                       <p className="text-xs text-white/70">
-                        {user?.role === "admin"
+                        {userRole === "admin"
                           ? "Quản trị viên"
-                          : user?.role === "teacher"
+                          : userRole === "teacher"
                             ? "Giảng viên"
                             : "Sinh viên"}
                       </p>
@@ -372,7 +364,7 @@ export function MainLayout() {
           <div className="flex justify-center mb-4">
             <div className="relative">
               <div className="w-24 h-24 rounded-full bg-primary text-white flex items-center justify-center text-3xl font-medium">
-                {user?.name.charAt(0).toUpperCase()}
+                {avatarInitial}
               </div>
               <button className="absolute bottom-0 right-0 w-8 h-8 bg-white border-2 border-primary rounded-full flex items-center justify-center hover:bg-slate-50">
                 <Edit3 className="w-4 h-4 text-primary" />
@@ -411,7 +403,7 @@ export function MainLayout() {
             />
           </div>
 
-          {user?.role === "student" && (
+          {userRole === "student" && (
             <div>
               <label className="block text-sm font-medium mb-2">
                 Mã sinh viên
@@ -454,9 +446,9 @@ export function MainLayout() {
             <input
               type="text"
               value={
-                user?.role === "admin"
+                userRole === "admin"
                   ? "Quản trị viên"
-                  : user?.role === "teacher"
+                  : userRole === "teacher"
                     ? "Giảng viên"
                     : "Sinh viên"
               }

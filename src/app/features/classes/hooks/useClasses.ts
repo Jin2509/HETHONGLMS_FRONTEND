@@ -3,6 +3,7 @@ import {
   getClasses, 
   getClassDetail, 
   getClassMembers, 
+  getAllStudents,
   createClass, 
   updateClass,
   deleteClass,
@@ -20,6 +21,7 @@ export function useClasses() {
   const [classes, setClasses] = useState<Class[]>([]);
   const [classDetail, setClassDetail] = useState<Class | null>(null);
   const [members, setMembers] = useState<ClassMember[]>([]);
+  const [students, setStudents] = useState<ClassMember[]>([]);
 
   const fetchClasses = useCallback(async () => {
     setLoading(true);
@@ -55,6 +57,22 @@ export function useClasses() {
     } catch (error: any) {
       const message = error.response?.data?.message || "Không thể tải danh sách thành viên";
       toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchAllStudents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getAllStudents();
+      setStudents(data);
+      return data;
+    } catch (error: any) {
+      const message = error.response?.data?.message || "Không thể tải danh sách sinh viên";
+      toast.error(message);
+      setStudents([]);
+      return [];
     } finally {
       setLoading(false);
     }
@@ -143,9 +161,11 @@ export function useClasses() {
     classes,
     classDetail,
     members,
+    students,
     fetchClasses,
     fetchClassDetail,
     fetchClassMembers,
+    fetchAllStudents,
     handleCreateClass,
     handleUpdateClass,
     handleDeleteClass,

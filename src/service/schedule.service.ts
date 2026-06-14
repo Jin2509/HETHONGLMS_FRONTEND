@@ -1,5 +1,6 @@
 import apiClient from "../api/client";
 import { ENDPOINTS } from "../api/endpoints";
+import { unwrapArray, unwrapData, type ApiResponse } from "./api-response";
 
 export interface ScheduleEvent {
   id: number;
@@ -26,23 +27,18 @@ export interface CreateEventData {
   color?: string;
 }
 
-export interface ApiResponse<T> {
-  message: string;
-  data: T;
-}
-
 export async function getSchedule(params?: {
   week?: number;
   month?: string;
   courseId?: number;
 }): Promise<ScheduleEvent[]> {
-  const response = await apiClient.get<ApiResponse<ScheduleEvent[]>>(ENDPOINTS.SCHEDULE.LIST, { params });
-  return response.data.data;
+  const response = await apiClient.get<unknown>(ENDPOINTS.SCHEDULE.LIST, { params });
+  return unwrapArray<ScheduleEvent>(response.data);
 }
 
 export async function createEvent(data: CreateEventData): Promise<ScheduleEvent> {
   const response = await apiClient.post<ApiResponse<ScheduleEvent>>(ENDPOINTS.SCHEDULE.CREATE, data);
-  return response.data.data;
+  return unwrapData<ScheduleEvent>(response.data);
 }
 
 export async function updateEvent(
@@ -50,7 +46,7 @@ export async function updateEvent(
   data: Partial<CreateEventData>
 ): Promise<ScheduleEvent> {
   const response = await apiClient.patch<ApiResponse<ScheduleEvent>>(ENDPOINTS.SCHEDULE.UPDATE(id), data);
-  return response.data.data;
+  return unwrapData<ScheduleEvent>(response.data);
 }
 
 export async function deleteEvent(id: number): Promise<void> {

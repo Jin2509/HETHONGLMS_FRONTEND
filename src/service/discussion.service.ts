@@ -1,5 +1,6 @@
 import apiClient from "../api/client";
 import { ENDPOINTS } from "../api/endpoints";
+import { unwrapArray, unwrapData, type ApiResponse } from "./api-response";
 
 export interface Discussion {
   id: number;
@@ -36,9 +37,43 @@ export interface CreateReplyData {
   content: string;
 }
 
-export interface ApiResponse<T> {
-  message: string;
-  data: T;
+type RawDiscussion = Partial<Discussion> & {
+  createdAt?: string;
+  author?: { id?: number; name?: string };
+  course?: { id?: number; name?: string };
+};
+
+type RawDiscussionReply = Partial<DiscussionReply> & {
+  author?: { id?: number; name?: string; role?: string };
+};
+
+function normalizeReply(reply: RawDiscussionReply): DiscussionReply {
+  return {
+    id: Number(reply.id || 0),
+    authorId: Number(reply.authorId || reply.author?.id || 0),
+    authorName: reply.authorName || reply.author?.name || "Người dùng",
+    authorRole: reply.authorRole || reply.author?.role,
+    content: reply.content || "",
+    likesCount: Number(reply.likesCount || 0),
+    time: reply.time || reply.createdAt || "",
+    createdAt: reply.createdAt || reply.time || "",
+  };
+}
+
+function normalizeDiscussion(discussion: RawDiscussion): Discussion {
+  return {
+    id: Number(discussion.id || 0),
+    title: discussion.title || "",
+    authorId: Number(discussion.authorId || discussion.author?.id || 0),
+    authorName: discussion.authorName || discussion.author?.name || "Người dùng",
+    courseId: Number(discussion.courseId || discussion.course?.id || 0),
+    courseName: discussion.courseName || discussion.course?.name,
+    repliesCount: Number(discussion.repliesCount || 0),
+    likesCount: Number(discussion.likesCount || 0),
+    time: discussion.time || discussion.createdAt || "",
+    unread: discussion.unread,
+    content: discussion.content || "",
+  };
 }
 
 export async function getDiscussions(params?: {
@@ -46,20 +81,24 @@ export async function getDiscussions(params?: {
   query?: string;
   courseId?: number;
 }): Promise<Discussion[]> {
-  const response = await apiClient.get<ApiResponse<Discussion[]>>(ENDPOINTS.DISCUSSIONS.LIST, { params });
-  return response.data.data;
+  const response = await apiClient.get<unknown>(ENDPOINTS.DISCUSSIONS.LIST, { params });
+  return unwrapArray<RawDiscussion>(response.data).map(normalizeDiscussion);
 }
 
 export async function getDiscussionDetail(
   id: number
 ): Promise<Discussion & { replies: DiscussionReply[] }> {
-  const response = await apiClient.get<ApiResponse<Discussion & { replies: DiscussionReply[] }>>(ENDPOINTS.DISCUSSIONS.DETAIL(id));
-  return response.data.data;
+  const response = await apiClient.get<unknown>(ENDPOINTS.DISCUSSIONS.DETAIL(id));
+  const detail = unwrapData<RawDiscussion & { replies?: RawDiscussionReply[] }>(response.data);
+  return {
+    ...normalizeDiscussion(detail),
+    replies: (detail.replies || []).map(normalizeReply),
+  };
 }
 
 export async function createDiscussion(data: CreateDiscussionData): Promise<Discussion> {
   const response = await apiClient.post<ApiResponse<Discussion>>(ENDPOINTS.DISCUSSIONS.CREATE, data);
-  return response.data.data;
+  return normalizeDiscussion(unwrapData<Discussion>(response.data));
 }
 
 export async function updateDiscussion(
@@ -67,7 +106,7 @@ export async function updateDiscussion(
   data: Partial<CreateDiscussionData>
 ): Promise<Discussion> {
   const response = await apiClient.patch<ApiResponse<Discussion>>(ENDPOINTS.DISCUSSIONS.UPDATE(id), data);
-  return response.data.data;
+  return normalizeDiscussion(unwrapData<Discussion>(response.data));
 }
 
 export async function deleteDiscussion(id: number): Promise<void> {
@@ -82,7 +121,7 @@ export async function replyToDiscussion(
     ENDPOINTS.DISCUSSIONS.REPLIES(discussionId),
     data
   );
-  return response.data.data;
+  return normalizeReply(unwrapData<DiscussionReply>(response.data));
 }
 
 export async function likeDiscussion(id: number): Promise<void> {

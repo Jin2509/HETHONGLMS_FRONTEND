@@ -1,95 +1,106 @@
 import { useAuth } from "../../../contexts/AuthContext";
 import { Link } from "react-router";
 import { useState, useEffect } from "react";
-import { 
-  BookOpen, 
-  FileCheck, 
-  Award, 
-  Clock, 
-  CheckCircle2, 
-  Users, 
-  ClipboardList, 
-  GraduationCap, 
+import {
+  BookOpen,
+  FileCheck,
+  Award,
+  Clock,
+  Users,
+  ClipboardList,
+  GraduationCap,
   AlertCircle,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Plus,
 } from "lucide-react";
 import { getVietnamTime } from "../../../utils/datetime";
-import { getSystemStats } from "../../../../service/report.service";
+import { normalizeRole } from "../../../utils/permissions";
+import { getSystemStats, type ReportStats } from "../../../../service/report.service";
+import { getClasses, type Class } from "../../../../service/class.service";
+import { getCourses, type Course } from "../../../../service/course.service";
+import { getAssignments } from "../../../../service/assignment.service";
+import { getExams } from "../../../../service/exam.service";
+import { getDiscussions } from "../../../../service/discussion.service";
+import type { Assignment } from "../../assignments/types/assignment.types";
+import type { Exam } from "../../../../service/exam.service";
 
-const upcomingDeadlines = [
-  { name: "Assignment: React Project", course: "Web Dev", due: "2 ngày nữa", urgency: "green" },
-  { name: "Quiz: Algorithms", course: "DSA", due: "1 ngày nữa", urgency: "amber" },
-  { name: "Final Exam: Database", course: "Database", due: "6 giờ nữa", urgency: "red" },
-];
+const DEFAULT_COURSE_THUMBNAIL =
+  "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400";
 
-import { Plus } from "lucide-react";
+function getDaysLeft(date?: string) {
+  if (!date) return Number.POSITIVE_INFINITY;
+  const timestamp = new Date(date).getTime();
+  if (Number.isNaN(timestamp)) return Number.POSITIVE_INFINITY;
+  return Math.ceil((timestamp - Date.now()) / 864e5);
+}
 
-const continueCourses = [
-  {
-    id: 1,
-    title: "Web Development Fundamentals",
-    thumbnail: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400",
-    progress: 75,
-    lastAccessed: "2 giờ trước",
-  },
-  {
-    id: 2,
-    title: "Data Structures & Algorithms",
-    thumbnail: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=400",
-    progress: 45,
-    lastAccessed: "1 ngày trước",
-  },
-];
+function formatDueText(date?: string) {
+  const days = getDaysLeft(date);
+  if (!Number.isFinite(days)) return "Chưa có hạn";
+  if (days < 0) return "Đã quá hạn";
+  if (days === 0) return "Hôm nay";
+  if (days === 1) return "Ngày mai";
+  return `${days} ngày nữa`;
+}
 
-const teacherClasses = [
-  { id: 1, name: "Web Development - Class A", students: 45, nextClass: "Thứ 2, 09:00", room: "A101" },
-  { id: 2, name: "Data Structures - Class B", students: 38, nextClass: "Thứ 3, 13:00", room: "B202" },
-];
-
-const adminSystemHealth = [
-  { name: "CPU Usage", value: 45, status: "Normal" },
-  { name: "Memory", value: 82, status: "Warning" },
-  { name: "Database", value: 12, status: "Normal" },
-];
-
-const studentRecentActivity = [
-  { icon: CheckCircle2, action: "Hoàn thành bài tập: React Hooks", time: "2 giờ trước", color: "text-success" },
-  { icon: FileCheck, action: "Nộp bài: Database Design", time: "5 giờ trước", color: "text-primary" },
-  { icon: Award, action: "Đạt điểm A cho bài kiểm tra Midterm", time: "1 ngày trước", color: "text-warning" },
-];
-
-const teacherRecentActivity = [
-  { icon: CheckCircle2, action: "Đã chấm điểm lớp Web Dev - A", time: "1 giờ trước", color: "text-success" },
-  { icon: Plus, action: "Tạo bài tập mới: React State Management", time: "3 giờ trước", color: "text-primary" },
-  { icon: AlertCircle, action: "15 bài nộp mới cần chấm điểm", time: "5 giờ trước", color: "text-warning" },
-];
-
-const adminRecentActivity = [
-  { icon: Users, action: "Đã thêm 5 sinh viên mới", time: "30 phút trước", color: "text-primary" },
-  { icon: CheckCircle2, action: "Hệ thống đã sao lưu dữ liệu", time: "2 giờ trước", color: "text-success" },
-  { icon: AlertCircle, action: "Cảnh báo: Bộ nhớ server đạt 85%", time: "4 giờ trước", color: "text-warning" },
-];
+function getUrgency(date?: string) {
+  const days = getDaysLeft(date);
+  if (days <= 1) return "red";
+  if (days <= 3) return "amber";
+  return "green";
+}
 
 export function Dashboard() {
   const { user } = useAuth();
-  const role = user?.role || "student";
-  const [systemStats, setSystemStats] = useState<any>(null);
+  const role = normalizeRole(user?.role);
+  const [systemStats, setSystemStats] = useState<ReportStats | null>(null);
+  const [classes, setClasses] = useState<Class[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [discussionCount, setDiscussionCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const data = await getSystemStats();
-        setSystemStats(data);
-      } catch (error) {
-        console.error("Failed to fetch stats:", error);
-      } finally {
-        setLoading(false);
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      const [
+        statsResult,
+        classesResult,
+        coursesResult,
+        assignmentsResult,
+        examsResult,
+        discussionsResult,
+      ] = await Promise.allSettled([
+        role === "admin" ? getSystemStats() : Promise.resolve(null),
+        getClasses(),
+        getCourses(),
+        getAssignments(),
+        getExams(),
+        getDiscussions(),
+      ]);
+
+      if (statsResult.status === "fulfilled" && statsResult.value) {
+        setSystemStats(statsResult.value);
       }
+      if (classesResult.status === "fulfilled") setClasses(classesResult.value);
+      if (coursesResult.status === "fulfilled") setCourses(coursesResult.value);
+      if (assignmentsResult.status === "fulfilled") setAssignments(assignmentsResult.value);
+      if (examsResult.status === "fulfilled") setExams(examsResult.value);
+      if (discussionsResult.status === "fulfilled") {
+        setDiscussionCount(discussionsResult.value.length);
+      }
+
+      const rejected = [statsResult, classesResult, coursesResult, assignmentsResult, examsResult, discussionsResult]
+        .filter((result) => result.status === "rejected");
+      if (rejected.length > 0) {
+        console.error("Failed to fetch some dashboard data:", rejected);
+      }
+      setLoading(false);
     };
-    fetchStats();
-  }, []);
+    fetchDashboardData();
+  }, [role]);
 
   const getGreeting = () => {
     const hour = getVietnamTime().getHours();
@@ -103,34 +114,72 @@ export function Dashboard() {
       case "admin":
         return [
           { icon: Users, label: "Tổng người dùng", value: systemStats?.totalUsers?.toString() || "0", color: "text-primary" },
-          { icon: GraduationCap, label: "Tổng lớp học", value: "32", color: "text-success" },
-          { icon: BookOpen, label: "Tổng khóa học", value: systemStats?.totalCourses?.toString() || "0", color: "text-warning" },
+          { icon: GraduationCap, label: "Tổng lớp học", value: (systemStats?.totalClasses ?? classes.length).toString(), color: "text-success" },
+          { icon: BookOpen, label: "Tổng khóa học", value: (systemStats?.totalCourses ?? courses.length).toString(), color: "text-warning" },
         ];
       case "teacher":
         return [
-          { icon: GraduationCap, label: "Lớp học đang dạy", value: "4", color: "text-primary" },
-          { icon: ClipboardList, label: "Bài tập đã giao", value: "24", color: "text-success" },
-          { icon: FileCheck, label: "Kỳ thi sắp tới", value: "2", color: "text-warning" },
+          { icon: GraduationCap, label: "Lớp học đang dạy", value: classes.length.toString(), color: "text-primary" },
+          { icon: ClipboardList, label: "Bài tập đã giao", value: assignments.length.toString(), color: "text-success" },
+          { icon: FileCheck, label: "Kỳ thi sắp tới", value: exams.filter((exam) => exam.status !== "finished").length.toString(), color: "text-warning" },
         ];
       default:
         return [
-          { icon: BookOpen, label: "Khóa học đang học", value: "8", color: "text-primary" },
-          { icon: FileCheck, label: "Bài thi tuần này", value: "3", color: "text-warning" },
+          { icon: BookOpen, label: "Khóa học đang học", value: courses.length.toString(), color: "text-primary" },
+          { icon: FileCheck, label: "Bài thi tuần này", value: exams.filter((exam) => getDaysLeft(exam.date) <= 7 && getDaysLeft(exam.date) >= 0).length.toString(), color: "text-warning" },
           { icon: Award, label: "Điểm TB", value: "8.5", color: "text-success" },
         ];
     }
   };
 
   const getRecentActivity = () => {
-    switch (role) {
-      case "admin": return adminRecentActivity;
-      case "teacher": return teacherRecentActivity;
-      default: return studentRecentActivity;
+    const latestAssignments = assignments.slice(0, 2).map((assignment) => ({
+      icon: ClipboardList,
+      action: `Bài tập: ${assignment.name}`,
+      time: formatDueText(assignment.dueDate),
+      color: "text-primary",
+    }));
+    const latestExams = exams.slice(0, 2).map((exam) => ({
+      icon: FileCheck,
+      action: `Kỳ thi: ${exam.name}`,
+      time: formatDueText(exam.date),
+      color: "text-warning",
+    }));
+    if (role === "admin") {
+      return [
+        { icon: Users, action: `${systemStats?.totalUsers || 0} người dùng trên hệ thống`, time: `${systemStats?.newUsersToday || 0} mới hôm nay`, color: "text-primary" },
+        { icon: BookOpen, action: `${courses.length} khóa học, ${classes.length} lớp học`, time: `${discussionCount} thảo luận`, color: "text-success" },
+        { icon: ClipboardList, action: `${assignments.length} bài tập, ${exams.length} kỳ thi`, time: `${systemStats?.monthlySubmissions || 0} bài nộp tháng này`, color: "text-warning" },
+      ];
     }
+    return [...latestAssignments, ...latestExams].slice(0, 3);
   };
 
   const currentStats = getStats();
   const currentActivity = getRecentActivity();
+  const upcomingDeadlines = [...assignments.map((assignment) => ({
+    name: assignment.name,
+    course: assignment.course,
+    due: formatDueText(assignment.dueDate),
+    urgency: getUrgency(assignment.dueDate),
+  })), ...exams.map((exam) => ({
+    name: exam.name,
+    course: exam.courseName || "Khóa học",
+    due: formatDueText(exam.date),
+    urgency: getUrgency(exam.date),
+  }))].slice(0, 3);
+  const teacherClasses = classes.slice(0, 4).map((cls) => ({
+    id: cls.id,
+    name: cls.name,
+    students: cls.studentCount || 0,
+    nextClass: "Chưa cập nhật",
+    room: "Chưa cập nhật",
+  }));
+  const adminSystemHealth = [
+    { name: "Người dùng", value: Math.min(systemStats?.totalUsers || 0, 100), status: "Normal" },
+    { name: "Khóa học", value: Math.min(systemStats?.totalCourses || courses.length, 100), status: "Normal" },
+    { name: "Tỉ lệ hoàn thành", value: Math.min(systemStats?.completionRate || 0, 100), status: (systemStats?.completionRate || 0) >= 60 ? "Normal" : "Warning" },
+  ];
 
   if (loading) {
     return (
@@ -149,9 +198,9 @@ export function Dashboard() {
             {getGreeting()}, {user?.name}
           </h1>
           <p className="text-muted-foreground">
-            {role === "student" && "Hôm nay bạn có 3 bài tập và 1 bài kiểm tra cần hoàn thành"}
-            {role === "teacher" && "Hôm nay bạn có 2 tiết dạy và 15 bài tập cần chấm điểm"}
-            {role === "admin" && "Hệ thống đang hoạt động ổn định. Có 5 người dùng mới đăng ký hôm nay."}
+            {role === "student" && `Bạn có ${upcomingDeadlines.length} mục học tập sắp tới.`}
+            {role === "teacher" && `Bạn đang phụ trách ${classes.length} lớp, ${assignments.length} bài tập và ${exams.length} kỳ thi.`}
+            {role === "admin" && `Hệ thống có ${systemStats?.totalUsers || 0} người dùng và ${courses.length} khóa học đang được đồng bộ.`}
           </p>
         </div>
         {role !== "student" && (
@@ -194,46 +243,47 @@ export function Dashboard() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold">Tiếp tục học</h2>
-                <Link to="/courses" className="text-sm text-primary hover:underline">
+                <Link to="/classes" className="text-sm text-primary hover:underline">
                   Xem tất cả
                 </Link>
               </div>
               <div className="flex gap-4 overflow-x-auto pb-2">
-                {continueCourses.map((course) => (
-                  <div
-                    key={course.id}
-                    className="flex-shrink-0 w-72 bg-card border border-border rounded-xl overflow-hidden shadow-sm card-hover cursor-pointer"
-                  >
-                    <div className="relative h-40">
-                      <img
-                        src={course.thumbnail}
-                        alt={course.title}
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-medium text-card-foreground mb-3 line-clamp-2">
-                        {course.title}
-                      </h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between text-xs text-muted-foreground">
-                          <span>{course.progress}% hoàn thành</span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {course.lastAccessed}
-                          </span>
-                        </div>
-                        <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                          <div
-                            className="bg-primary h-1.5 rounded-full animate-progress"
-                            style={{ width: `${course.progress}%` }}
-                          ></div>
+                {courses.length === 0 ? (
+                  <div className="w-full py-8 text-center text-muted-foreground border border-dashed border-border rounded-xl">
+                    Chưa có khóa học nào. Hãy vào mục Lớp học để xem khóa học được gán.
+                  </div>
+                ) : (
+                  courses.slice(0, 6).map((course) => (
+                    <Link
+                      key={course.id}
+                      to={`/courses/${course.id}`}
+                      className="flex-shrink-0 w-72 bg-card border border-border rounded-xl overflow-hidden shadow-sm card-hover"
+                    >
+                      <div className="relative h-40">
+                        <img
+                          src={course.thumbnailUrl || DEFAULT_COURSE_THUMBNAIL}
+                          alt={course.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                      </div>
+                      <div className="p-4">
+                        <h3 className="font-medium text-card-foreground mb-2 line-clamp-2">
+                          {course.name}
+                        </h3>
+                        {course.instructor && (
+                          <p className="text-xs text-muted-foreground mb-3">
+                            {course.instructor}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <BookOpen className="w-3 h-3" />
+                          <span>{course.chapters?.length || 0} chương</span>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -335,7 +385,7 @@ export function Dashboard() {
           {/* Mini Calendar */}
           <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
             <h3 className="font-medium mb-4 flex items-center justify-between">
-              Tháng 6, 2026
+              {getVietnamTime().toLocaleDateString("vi-VN", { month: "long", year: "numeric" })}
               <button className="text-muted-foreground hover:text-primary">
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -348,7 +398,7 @@ export function Dashboard() {
               ))}
               {Array.from({ length: 35 }, (_, i) => {
                 const day = i - 1;
-                const isToday = day === 2;
+                const isToday = day === getVietnamTime().getDate();
                 const hasEvent = [5, 8, 12, 15, 20].includes(day);
                 return (
                   <div

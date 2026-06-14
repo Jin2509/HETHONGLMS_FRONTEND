@@ -2,7 +2,8 @@ import axios from "axios";
 import { toast } from "sonner";
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
+  // In dev, use "/api" so Vite proxy forwards to backend and avoids CORS.
+  baseURL: import.meta.env.VITE_API_URL || "/api",
   headers: {
     "Content-Type": "application/json",
   },
@@ -45,7 +46,8 @@ apiClient.interceptors.response.use(
         localStorage.removeItem("lms_user");
         window.location.href = "/login";
       } else if (status === 403) {
-        toast.error("Không có quyền thực hiện: " + message);
+        // Don't show toast for 403 (permission denied) to avoid spamming on dashboard
+        console.log("[403] Không có quyền truy cập:", message);
       } else if (status === 400) {
         // Bad request - often validation errors
         // We let the hook/component handle this if they want to show specific field errors

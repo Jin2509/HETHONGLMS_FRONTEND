@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Modal, FileDropzone } from "../../../components/shared";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canManageContent } from "../../../utils/permissions";
+import { canManageContent, normalizeRole } from "../../../utils/permissions";
 import { toast } from "sonner";
 import { useCourses } from "../hooks/useCourses";
 
@@ -22,7 +22,7 @@ export function CourseDetail() {
   const { id } = useParams();
   const courseId = Number(id);
   const { user } = useAuth();
-  const userRole = user?.role || "student";
+  const userRole = normalizeRole(user?.role);
   const { courseDetail, loading, fetchCourseDetail, handleCreateChapter, handleUploadMaterial, handleDeleteMaterial, handleDownloadMaterial } = useCourses();
   
   const [showUploadModal, setShowUploadModal] = useState(false);

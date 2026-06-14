@@ -4,7 +4,7 @@ import { Modal } from "../../../components/shared";
 import { toast } from "sonner";
 import { getVietnamDateInputValue } from "../../../utils/datetime";
 import { useAuth } from "../../../contexts/AuthContext";
-import { canManageContent, canSubmitWork, canViewAllSubmissions } from "../../../utils/permissions";
+import { canManageContent, canSubmitWork, canViewAllSubmissions, normalizeRole } from "../../../utils/permissions";
 import { AssignmentTable } from "../components/AssignmentTable";
 import { AssignmentFormModal } from "../components/AssignmentFormModal";
 import type { Assignment, AssignmentFormData } from "../types/assignment.types";
@@ -14,7 +14,7 @@ import { useCourses } from "../../courses/hooks/useCourses";
 
 export function AssignmentListPage() {
   const { user } = useAuth();
-  const userRole = user?.role || "student";
+  const userRole = normalizeRole(user?.role);
   const {
     assignments,
     loading,

@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "sonner";
 import * as authService from "../../service/auth.service";
+import { normalizeRole, type UserRole } from "../utils/permissions";
 
 export interface User {
   id: number;
   email: string;
   name: string;
-  role: "student" | "teacher" | "admin";
+  role: UserRole;
   avatarUrl?: string;
 }
 
@@ -33,7 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (savedUser && savedToken) {
         try {
           const userData = JSON.parse(savedUser);
-          setUser(userData);
+          setUser({
+            ...userData,
+            role: normalizeRole(userData.role),
+          });
         } catch (error) {
           localStorage.removeItem("lms_user");
         }
@@ -47,12 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     const response = await authService.login({ email, password });
     const { user: userData, accessToken } = response;
+    const normalizedUser: User = {
+      ...userData,
+      role: normalizeRole(userData.role),
+    };
 
-    setUser(userData);
-    localStorage.setItem("lms_user", JSON.stringify(userData));
+    setUser(normalizedUser);
+    localStorage.setItem("lms_user", JSON.stringify(normalizedUser));
     localStorage.setItem("lms_token", accessToken);
 
-    toast.success(`Chào mừng trở lại, ${userData.name}!`, {
+    toast.success(`Chào mừng trở lại, ${normalizedUser.name}!`, {
       description: "Đăng nhập thành công",
     });
   };
